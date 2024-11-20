@@ -1,0 +1,41 @@
+[package]
+name = "bls-blueprint"
+version = "0.1.1"
+description = "A BLS Blueprint that can run keygen and signing jobs on demand from the Tangle network"
+edition = "2021"
+
+[package.metadata.blueprint]
+manager = { Evm = "BlsBlueprint" }
+
+[dependencies]
+gadget-sdk = { git = "https://github.com/tangle-network/gadget/", features = ["std"] }
+#gadget-sdk = { path = "../gadget/sdk", features = ["std"] }
+color-eyre = { version = "0.6", features = ["tracing-error", "color-spantrace"] }
+tokio = { version = "1.40", default-features = false, features = ["full"] }
+hex = { version = "0.4.3", default-features = false }
+k256 = { version = "0.13.3", default-features = false }
+bincode = "1.3.3"
+sp-core = { version = "31.0.0", default-features = false }
+rand_chacha = "0.3.1"
+serde = { version = "1.0.214", features = ["derive"] }
+round-based = { version = "0.3.2", features = ["runtime-tokio"] }
+tracing-subscriber = "0.3.18"
+thiserror = "2.0.3"
+itertools = "0.13.0"
+
+# MPC specific deps
+bls12_381_plus = "0.8.18"
+snowbridge-milagro-bls = "1.5.4"
+gennaro-dkg = { version = "0.8.0", features = ["curve25519"]}
+
+[build-dependencies]
+blueprint-metadata = { path = "../gadget/blueprint-metadata" }
+
+[dev-dependencies]
+blueprint-test-utils = { path = "../gadget/blueprint-test-utils" }
+cargo-tangle = { path = "../gadget/cli" }
+#alloy-primitives = "0.7.2"
+
+[features]
+default = ["std"]
+std = []
