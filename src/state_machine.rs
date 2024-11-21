@@ -87,7 +87,7 @@ where
     let (incomings, mut outgoings) = delivery.split();
     let mut state = BlsState::default();
 
-    let i = NonZeroUsize::new(i as usize).expect("I > 0");
+    let i = NonZeroUsize::new((i + 1) as usize).expect("I > 0");
     let n = NonZeroUsize::new(n as usize).expect("N > 0");
     let t = NonZeroUsize::new(t as usize).expect("T > 0");
     let parameters = Parameters::new(t, n);
@@ -95,6 +95,8 @@ where
         Participant::new(i, parameters).map_err(|e| KeygenError::MpcError(e.to_string()))?;
 
     let (i, _t, n) = (i.get() as u16, t.get() as u16, n.get() as u16);
+    let i = i - 1;
+
     // Build rounds
     let mut rounds = RoundsRouter::builder();
     let round1 = rounds.add_round(RoundInput::<Msg1>::broadcast(i, n));
@@ -214,7 +216,7 @@ where
         .map_err(|err| KeygenError::MpcError(err.to_string()))?;
     state.round1_broadcasts = round1_broadcasts
         .into_iter_indexed()
-        .map(|r| (r.2.source as _, r.2.data))
+        .map(|r| ((r.2.source + 1) as _, r.2.data))
         .collect();
 
     gadget_sdk::info!(
@@ -238,7 +240,7 @@ where
     for (j, round1_p2p_data) in round1_p2p_data {
         let p2p_msg = Msg::Round1P2P(Msg1P2P {
             source: i,
-            destination: j as u16,
+            destination: (j - 1) as u16,
             data: round1_p2p_data,
         });
         send_message::<M>(p2p_msg, tx).await?;
@@ -250,7 +252,7 @@ where
         .map_err(|err| KeygenError::MpcError(err.to_string()))?;
     state.round1_p2p = round1_p2p
         .into_iter_indexed()
-        .map(|r| (r.2.source as _, r.2.data))
+        .map(|r| ((r.2.source + 1) as _, r.2.data))
         .collect();
 
     gadget_sdk::info!(
@@ -282,7 +284,7 @@ where
         .map_err(|err| KeygenError::MpcError(err.to_string()))?;
     state.round2_broadcasts = round2_broadcasts
         .into_iter_indexed()
-        .map(|r| (r.2.source as _, r.2.data))
+        .map(|r| ((r.2.source + 1) as _, r.2.data))
         .collect();
 
     gadget_sdk::info!(
@@ -314,7 +316,7 @@ where
         .map_err(|err| KeygenError::MpcError(err.to_string()))?;
     state.round3_broadcasts = round3_broadcasts
         .into_iter_indexed()
-        .map(|r| (r.2.source as _, r.2.data))
+        .map(|r| ((r.2.source + 1) as _, r.2.data))
         .collect();
 
     gadget_sdk::info!(
@@ -346,7 +348,7 @@ where
         .map_err(|err| KeygenError::MpcError(err.to_string()))?;
     state.round4_broadcasts = round4_broadcasts
         .into_iter_indexed()
-        .map(|r| (r.2.source as _, r.2.data))
+        .map(|r| ((r.2.source + 1) as _, r.2.data))
         .collect();
 
     gadget_sdk::info!(
@@ -368,19 +370,21 @@ where
     M: Mpc<ProtocolMessage = Msg>,
 {
     let key_share = round5_broadcast_data.as_uncompressed_bytes().to_vec();
-    let my_broadcast = Msg5 {
+    let mut my_broadcast = Msg5 {
         source: i,
         data: key_share,
     };
     let broadcast_msg = Msg::Round5Broadcast(my_broadcast.clone());
     send_message::<M>(broadcast_msg.clone(), tx).await?;
+
+    my_broadcast.source += 1; // adjust for 1-indexed gennaro
     let round5_broadcasts = rounds
         .complete(round5)
         .await
         .map_err(|err| KeygenError::MpcError(err.to_string()))?;
     state.round5_broadcasts = round5_broadcasts
         .into_iter_including_me(my_broadcast)
-        .map(|r| (r.source as _, r.data))
+        .map(|r| ((r.source + 1) as _, r.data))
         .collect();
 
     let mut received_pk_shares = HashMap::<usize, snowbridge_milagro_bls::PublicKey>::new();

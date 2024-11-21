@@ -29,11 +29,11 @@ snowbridge-milagro-bls = "1.5.4"
 gennaro-dkg = { version = "0.8.0", features = ["curve25519"]}
 
 [build-dependencies]
-blueprint-metadata = { path = "../gadget/blueprint-metadata" }
+blueprint-metadata = { git = "https://github.com/tangle-network/gadget/" }
 
 [dev-dependencies]
-blueprint-test-utils = { path = "../gadget/blueprint-test-utils" }
-cargo-tangle = { path = "../gadget/cli" }
+blueprint-test-utils = { git = "https://github.com/tangle-network/gadget/" }
+cargo-tangle = { git = "https://github.com/tangle-network/gadget/" }
 #alloy-primitives = "0.7.2"
 
 [features]

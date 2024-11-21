@@ -1,0 +1,4 @@
+[submodule "contracts/lib/tnt-core"]
+	path = contracts/lib/tnt-core
+	url = https://github.com/tangle-network/tnt-core
+	branch = main

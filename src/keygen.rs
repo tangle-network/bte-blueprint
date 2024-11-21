@@ -65,7 +65,7 @@ pub async fn keygen(n: u16, context: BlsContext) -> Result<Vec<u8>, GadgetError>
     let i = i as u16;
 
     gadget_sdk::info!(
-        "Starting BLS Keygen for Party {i}, n={n}, eid={}",
+        "Starting BLS Keygen for party {i}, n={n}, eid={}",
         hex::encode(deterministic_hash)
     );
 
@@ -85,11 +85,16 @@ pub async fn keygen(n: u16, context: BlsContext) -> Result<Vec<u8>, GadgetError>
         hex::encode(deterministic_hash)
     );
 
+    let public_key = output
+        .uncompressed_pk
+        .clone()
+        .ok_or_else(|| KeygenError::MpcError("Public key missing".to_string()))?;
+
     // Store the results
     let store_key = hex::encode(meta_hash);
     context.store.set(&store_key, output);
 
-    Ok(vec![])
+    Ok(public_key)
 }
 
 /// Configuration constants for the BLS keygen process
