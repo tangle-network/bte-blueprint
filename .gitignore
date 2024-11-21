@@ -16,7 +16,7 @@ Cargo.lock
 .vscode/
 *.swp
 *.swo
-
+keystores/
 # macOS specific files
 .DS_Store
 .AppleDouble
