@@ -115,6 +115,10 @@ pub async fn sign(
         crate::signing_state_machine::bls_signing_protocol(party, i, n, &mut state, message)
             .await?;
 
+    let signature = output
+        .signature
+        .ok_or_else(|| SigningError::KeyRetrievalError("Signature not found".to_string()))?;
+
     // For now, return a placeholder
-    Ok(Vec::new())
+    Ok(signature)
 }
