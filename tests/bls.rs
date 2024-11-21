@@ -64,12 +64,12 @@ mod e2e {
                 let service = &svcs.services[KEYGEN_JOB_ID as usize];
 
                 let service_id = service.id;
-                let call_id = get_next_call_id(client)
+                let keygen_call_id = get_next_call_id(client)
                     .await
                     .expect("Failed to get next job id")
                     .saturating_sub(1);
 
-                info!("Submitting job with params service ID: {service_id}, call ID: {call_id}");
+                info!("Submitting job with params service ID: {service_id}, call ID: {keygen_call_id}");
 
                 // Pass the arguments
                 let n = Field::Uint16(N as u16);
@@ -85,13 +85,13 @@ mod e2e {
 
                 // Step 2: wait for the job to complete
                 let job_results =
-                    wait_for_completion_of_tangle_job(client, service_id, call_id, N - 1)
+                    wait_for_completion_of_tangle_job(client, service_id, keygen_call_id, N - 1)
                         .await
                         .expect("Failed to wait for job completion");
 
                 // Step 3: Get the job results, compare to expected value(s)
                 assert_eq!(job_results.service_id, service_id);
-                assert_eq!(job_results.call_id, call_id);
+                assert_eq!(job_results.call_id, keygen_call_id);
                 assert!(matches!(job_results.result[0], Field::Bytes(_)));
 
                 // Now, run a signing job
@@ -107,7 +107,7 @@ mod e2e {
 
                 // Pass the arguments
                 let n = Field::Uint16(N as u16);
-                let keygen_call_id = Field::Uint64(call_id);
+                let keygen_call_id = Field::Uint64(keygen_call_id);
                 let message = Field::Bytes(BoundedVec(vec![1, 2, 3]));
                 let job_args = vec![n, keygen_call_id, message];
 
