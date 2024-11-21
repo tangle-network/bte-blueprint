@@ -24,6 +24,20 @@
       "result": [
         "Bytes"
       ]
+    },
+    {
+      "metadata": {
+        "name": "sign",
+        "description": "Signs a message using the BLS protocol with a previously generated key\n\n# Arguments\n* `message` - The message to sign as a byte vector\n* `context` - The DFNS context containing network and storage configuration\n\n# Returns\nReturns the signature as a byte vector on success\n\n# Errors\nReturns an error if:\n- Failed to retrieve blueprint ID or call ID\n- Failed to retrieve the key entry\n- Signing process failed"
+      },
+      "params": [
+        "Uint16",
+        "Uint64",
+        "Bytes"
+      ],
+      "result": [
+        "Bytes"
+      ]
     }
   ],
   "registration_params": [],

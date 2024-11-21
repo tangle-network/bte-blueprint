@@ -1,6 +1,5 @@
 use crate::context::BlsContext;
 use gadget_sdk::{
-    compute_sha256_hash,
     event_listener::tangle::{
         jobs::{services_post_processor, services_pre_processor},
         TangleEventListener,
@@ -48,7 +47,8 @@ pub async fn keygen(n: u16, context: BlsContext) -> Result<Vec<u8>, GadgetError>
         .await
         .map_err(|e| KeygenError::ContextError(e.to_string()))?;
 
-    let (meta_hash, deterministic_hash) = compute_deterministic_hashes(n, blueprint_id, call_id);
+    let (meta_hash, deterministic_hash) =
+        crate::compute_deterministic_hashes(n, blueprint_id, call_id, KEYGEN_SALT);
 
     // Setup party information
     let (i, operators) = context
@@ -78,7 +78,7 @@ pub async fn keygen(n: u16, context: BlsContext) -> Result<Vec<u8>, GadgetError>
 
     let party = round_based::party::MpcParty::connected(network);
 
-    let output = crate::state_machine::bls_keygen_protocol(party, i, t, n).await?;
+    let output = crate::keygen_state_machine::bls_keygen_protocol(party, i, t, n, call_id).await?;
 
     gadget_sdk::info!(
         "Ending BLS Keygen for party {i}, n={n}, eid={}",
@@ -99,7 +99,6 @@ pub async fn keygen(n: u16, context: BlsContext) -> Result<Vec<u8>, GadgetError>
 
 /// Configuration constants for the BLS keygen process
 const KEYGEN_SALT: &str = "bls-keygen";
-const META_SALT: &str = "bls";
 
 /// Error type for keygen-specific operations
 #[derive(Debug, thiserror::Error)]
@@ -121,18 +120,4 @@ impl From<KeygenError> for GadgetError {
     fn from(err: KeygenError) -> Self {
         GadgetError::Other(err.to_string())
     }
-}
-
-/// Helper function to compute deterministic hashes for the keygen process
-fn compute_deterministic_hashes(n: u16, blueprint_id: u64, call_id: u64) -> ([u8; 32], [u8; 32]) {
-    let meta_hash = compute_sha256_hash!(
-        n.to_be_bytes(),
-        blueprint_id.to_be_bytes(),
-        call_id.to_be_bytes(),
-        META_SALT
-    );
-
-    let deterministic_hash = compute_sha256_hash!(meta_hash.as_ref(), KEYGEN_SALT);
-
-    (meta_hash, deterministic_hash)
 }

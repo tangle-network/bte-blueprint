@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::state_machine::BlsState;
+use crate::keygen_state_machine::BlsState;
 
 /// The network protocol version for the BLS service
 const NETWORK_PROTOCOL: &str = "/bls/gennaro/1.0.0";

@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use gennaro_dkg::{
     Parameters, Participant, Round1BroadcastData, Round1P2PData, Round2EchoBroadcastData,
     Round3BroadcastData, Round4EchoBroadcastData, SecretParticipantImpl,
@@ -10,6 +8,7 @@ use round_based::MessageDestination;
 use round_based::SinkExt;
 use round_based::{Delivery, Mpc, MpcParty, PartyIndex, ProtocolMessage};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 
@@ -27,6 +26,18 @@ pub struct BlsState {
     round5_broadcasts: BTreeMap<usize, Vec<u8>>,
     pub uncompressed_pk: Option<Vec<u8>>, // [u8; 97]
     pub secret_key: Option<Participant<SecretParticipantImpl<Group>, Group>>,
+    pub call_id: u64,
+    pub t: u16,
+}
+
+impl BlsState {
+    pub fn new(call_id: u64, t: u16) -> Self {
+        BlsState {
+            call_id,
+            t,
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(ProtocolMessage, Serialize, Deserialize, Clone)]
@@ -78,6 +89,7 @@ pub async fn bls_keygen_protocol<M>(
     i: PartyIndex,
     t: u16,
     n: u16,
+    call_id: u64,
 ) -> Result<BlsState, KeygenError>
 where
     M: Mpc<ProtocolMessage = Msg>,
@@ -85,7 +97,7 @@ where
     let MpcParty { delivery, .. } = party.into_party();
 
     let (incomings, mut outgoings) = delivery.split();
-    let mut state = BlsState::default();
+    let mut state = BlsState::new(call_id, t);
 
     let i = NonZeroUsize::new((i + 1) as usize).expect("I > 0");
     let n = NonZeroUsize::new(n as usize).expect("N > 0");
@@ -209,7 +221,7 @@ where
         source: i,
         data: round1_broadcast_data,
     });
-    send_message::<M>(broadcast_msg, tx).await?;
+    send_message::<M, Msg>(broadcast_msg, tx).await?;
     let round1_broadcasts = rounds
         .complete(round1)
         .await
@@ -243,7 +255,7 @@ where
             destination: (j - 1) as u16,
             data: round1_p2p_data,
         });
-        send_message::<M>(p2p_msg, tx).await?;
+        send_message::<M, Msg>(p2p_msg, tx).await?;
     }
 
     let round1_p2p = rounds
@@ -277,7 +289,7 @@ where
         source: i,
         data: round2_broadcast_data,
     });
-    send_message::<M>(broadcast_msg, tx).await?;
+    send_message::<M, Msg>(broadcast_msg, tx).await?;
     let round2_broadcasts = rounds
         .complete(round2)
         .await
@@ -309,7 +321,7 @@ where
         source: i,
         data: round3_broadcast_data,
     });
-    send_message::<M>(broadcast_msg, tx).await?;
+    send_message::<M, Msg>(broadcast_msg, tx).await?;
     let round3_broadcasts = rounds
         .complete(round3)
         .await
@@ -341,7 +353,7 @@ where
         source: i,
         data: round4_broadcast_data,
     });
-    send_message::<M>(broadcast_msg, tx).await?;
+    send_message::<M, Msg>(broadcast_msg, tx).await?;
     let round4_broadcasts = rounds
         .complete(round4)
         .await
@@ -375,7 +387,7 @@ where
         data: key_share,
     };
     let broadcast_msg = Msg::Round5Broadcast(my_broadcast.clone());
-    send_message::<M>(broadcast_msg.clone(), tx).await?;
+    send_message::<M, Msg>(broadcast_msg.clone(), tx).await?;
 
     my_broadcast.source += 1; // adjust for 1-indexed gennaro
     let round5_broadcasts = rounds
@@ -422,21 +434,32 @@ where
     Ok(())
 }
 
-async fn send_message<M>(
+pub trait HasRecipient {
+    fn recipient(&self) -> MessageDestination;
+}
+
+impl HasRecipient for Msg {
+    fn recipient(&self) -> MessageDestination {
+        match self {
+            Msg::Round1Broadcast(_) => MessageDestination::AllParties,
+            Msg::Round1P2P(msg) => MessageDestination::OneParty(msg.destination),
+            Msg::Round2Broadcast(_) => MessageDestination::AllParties,
+            Msg::Round3Broadcast(_) => MessageDestination::AllParties,
+            Msg::Round4Broadcast(_) => MessageDestination::AllParties,
+            Msg::Round5Broadcast(_) => MessageDestination::AllParties,
+        }
+    }
+}
+
+pub async fn send_message<M, Msg>(
     msg: Msg,
     tx: &mut <<M as Mpc>::Delivery as Delivery<Msg>>::Send,
 ) -> Result<(), KeygenError>
 where
+    Msg: HasRecipient,
     M: Mpc<ProtocolMessage = Msg>,
 {
-    let recipient = match &msg {
-        Msg::Round1Broadcast(_) => MessageDestination::AllParties,
-        Msg::Round1P2P(msg) => MessageDestination::OneParty(msg.destination),
-        Msg::Round2Broadcast(_) => MessageDestination::AllParties,
-        Msg::Round3Broadcast(_) => MessageDestination::AllParties,
-        Msg::Round4Broadcast(_) => MessageDestination::AllParties,
-        Msg::Round5Broadcast(_) => MessageDestination::AllParties,
-    };
+    let recipient = msg.recipient();
     let msg = round_based::Outgoing { recipient, msg };
     tx.send(msg)
         .await
