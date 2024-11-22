@@ -100,5 +100,10 @@ jobs:
 
       - uses: taiki-e/github-actions/free-device-space@main
 
+      - name: Download Tangle Manual Sealing
+        run: |
+          wget https://github.com/tangle-network/tangle/releases/download/v1.2.3/tangle-testnet-manual-seal-linux-amd64
+          chmod +x tangle-testnet-manual-seal-linux-amd64
+
       - name: tests
-        run: cargo nextest run
+        run: TANGLE_NODE=$(pwd)/tangle-testnet-manual-seal-linux-amd64 cargo nextest run
