@@ -1,14 +1,8 @@
 use crate::context::BlsContext;
-use gadget_sdk::{
-    event_listener::tangle::{
-        jobs::{services_post_processor, services_pre_processor},
-        TangleEventListener,
-    },
-    job,
-    network::round_based_compat::NetworkDeliveryWrapper,
-    tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled,
-    Error as GadgetError,
-};
+use gadget_sdk::{event_listener::tangle::{
+    jobs::{services_post_processor, services_pre_processor},
+    TangleEventListener,
+}, job, network::round_based_compat::NetworkDeliveryWrapper, tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled, ByteBuf, Error as GadgetError};
 use sp_core::ecdsa::Public;
 use std::collections::BTreeMap;
 
@@ -36,7 +30,7 @@ use std::collections::BTreeMap;
 /// - Failed to get party information
 /// - MPC protocol execution failed
 /// - Serialization of results failed
-pub async fn keygen(n: u16, context: BlsContext) -> Result<Vec<u8>, GadgetError> {
+pub async fn keygen(n: u16, context: BlsContext) -> Result<ByteBuf, GadgetError> {
     let t = n - 1;
     // Get configuration and compute deterministic values
     let blueprint_id = context
@@ -94,7 +88,7 @@ pub async fn keygen(n: u16, context: BlsContext) -> Result<Vec<u8>, GadgetError>
     let store_key = hex::encode(meta_hash);
     context.store.set(&store_key, output);
 
-    Ok(public_key)
+    Ok(public_key.into())
 }
 
 /// Configuration constants for the BLS keygen process
