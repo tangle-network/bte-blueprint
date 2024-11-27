@@ -1,8 +1,14 @@
 use crate::context::BlsContext;
-use gadget_sdk::{event_listener::tangle::{
-    jobs::{services_post_processor, services_pre_processor},
-    TangleEventListener,
-}, job, network::round_based_compat::NetworkDeliveryWrapper, tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled, ByteBuf, Error as GadgetError};
+use gadget_sdk::{
+    event_listener::tangle::{
+        jobs::{services_post_processor, services_pre_processor},
+        TangleEventListener,
+    },
+    job,
+    network::round_based_compat::NetworkDeliveryWrapper,
+    tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled,
+    ByteBuf, Error as GadgetError,
+};
 use sp_core::ecdsa::Public;
 use std::collections::BTreeMap;
 

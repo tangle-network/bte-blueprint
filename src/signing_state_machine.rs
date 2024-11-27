@@ -31,15 +31,16 @@ pub struct Msg1 {
     pub body: (Vec<u8>, Vec<u8>), // (signature_share, public_key_share)
 }
 
-pub async fn bls_signing_protocol<M>(
+pub async fn bls_signing_protocol<M, T>(
     party: M,
     i: PartyIndex,
     n: u16,
     state: &mut BlsState,
-    input_data_to_sign: Vec<u8>,
+    input_data_to_sign: T,
 ) -> Result<BlsSigningState, SigningError>
 where
     M: Mpc<ProtocolMessage = Msg>,
+    T: AsRef<[u8]>,
 {
     let MpcParty { delivery, .. } = party.into_party();
     let (incomings, mut outgoings) = delivery.split();
@@ -61,7 +62,7 @@ where
         .map_err(|e| SigningError::MpcError(format!("Failed to create secret key: {e:?}")))?;
 
     // Step 1: Generate shares
-    let sign_input = gadget_sdk::compute_sha256_hash!(&input_data_to_sign);
+    let sign_input = gadget_sdk::compute_sha256_hash!(input_data_to_sign.as_ref());
     let sig_share = Signature::new(&sign_input, &secret_key);
     let pk_share = PublicKey::from_secret_key(&secret_key);
 

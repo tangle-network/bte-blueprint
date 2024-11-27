@@ -9,7 +9,7 @@ use gadget_sdk::{
     job,
     network::round_based_compat::NetworkDeliveryWrapper,
     tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled,
-    Error as GadgetError,
+    ByteBuf, Error as GadgetError,
 };
 use sp_core::ecdsa::Public;
 use thiserror::Error;
@@ -59,9 +59,10 @@ impl From<SigningError> for GadgetError {
 pub async fn sign(
     n: u16,
     keygen_call_id: u64,
-    message: Vec<u8>,
+    message: ByteBuf,
     context: BlsContext,
-) -> Result<Vec<u8>, GadgetError> {
+) -> Result<ByteBuf, GadgetError> {
+    // let message = message.into_bytes();
     // Get configuration and compute deterministic values
     let blueprint_id = context
         .blueprint_id()
@@ -120,5 +121,5 @@ pub async fn sign(
         .ok_or_else(|| SigningError::KeyRetrievalError("Signature not found".to_string()))?;
 
     // For now, return a placeholder
-    Ok(signature)
+    Ok(signature.into())
 }
