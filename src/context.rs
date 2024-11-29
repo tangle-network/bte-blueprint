@@ -5,14 +5,14 @@ use gadget_sdk::network::NetworkMultiplexer;
 use gadget_sdk::store::LocalDatabase;
 use gadget_sdk::subxt_core::ext::sp_core::ecdsa;
 use gadget_sdk::subxt_core::utils::AccountId32;
-use sdk::ctx::{KeystoreContext, ServicesContext, TangleClientContext};
+use sdk::contexts::{KeystoreContext, ServicesContext, TangleClientContext};
 use sdk::tangle_subxt::tangle_testnet_runtime::api;
 use sp_core::ecdsa::Public;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::state_machine::BlsState;
+use crate::keygen_state_machine::BlsState;
 
 /// The network protocol version for the BLS service
 const NETWORK_PROTOCOL: &str = "/bls/gennaro/1.0.0";

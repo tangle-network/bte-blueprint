@@ -17,6 +17,8 @@ Cargo.lock
 *.swp
 *.swo
 keystores/
+blueprint.json
+contracts/cache
 # macOS specific files
 .DS_Store
 .AppleDouble
