@@ -5,7 +5,6 @@ mod e2e {
     use bls_blueprint::keygen::KEYGEN_JOB_ID;
     use bls_blueprint::signing::SIGN_JOB_ID;
     use blueprint_test_utils::*;
-    use gadget_sdk::tangle_subxt::tangle_testnet_runtime::api::runtime_types::tangle_primitives::services::field::BoundedString;
 
     const N: usize = 3;
     const T: usize = 3;
@@ -19,13 +18,16 @@ mod e2e {
         N,
         T,
         KEYGEN_JOB_ID,
-        [InputValue::Uint16(N as _)],
+        [InputValue::Uint16(T as u16)],
         [],
         SIGN_JOB_ID,
         [
-            InputValue::Uint16(N as _),
             InputValue::Uint64(KEYGEN_CALL_ID.load(std::sync::atomic::Ordering::SeqCst)),
-            InputValue::Bytes(BoundedVec(vec![1, 2, 3]))
+            InputValue::List(BoundedVec(vec![
+                InputValue::Uint8(1),
+                InputValue::Uint8(2),
+                InputValue::Uint8(3),
+            ]))
         ],
         [],
         KEYGEN_CALL_ID,

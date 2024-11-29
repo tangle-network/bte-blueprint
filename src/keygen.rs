@@ -7,14 +7,14 @@ use gadget_sdk::{
     job,
     network::round_based_compat::NetworkDeliveryWrapper,
     tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled,
-    ByteBuf, Error as GadgetError,
+    Error as GadgetError,
 };
 use sp_core::ecdsa::Public;
 use std::collections::BTreeMap;
 
 #[job(
     id = 0,
-    params(n),
+    params(t),
     event_listener(
         listener = TangleEventListener<BlsContext, JobCalled>,
         pre_processor = services_pre_processor,
@@ -24,7 +24,7 @@ use std::collections::BTreeMap;
 /// Runs a distributed key generation (DKG) process using the BLS protocol
 ///
 /// # Arguments
-/// * `n` - Number of parties participating in the DKG
+/// * `t` - Threshold value for the DKG process
 /// * `context` - The DFNS context containing network and storage configuration
 ///
 /// # Returns
@@ -36,8 +36,7 @@ use std::collections::BTreeMap;
 /// - Failed to get party information
 /// - MPC protocol execution failed
 /// - Serialization of results failed
-pub async fn keygen(n: u16, context: BlsContext) -> Result<ByteBuf, GadgetError> {
-    let t = n - 1;
+pub async fn keygen(t: u16, context: BlsContext) -> Result<Vec<u8>, GadgetError> {
     // Get configuration and compute deterministic values
     let blueprint_id = context
         .blueprint_id()
@@ -46,9 +45,6 @@ pub async fn keygen(n: u16, context: BlsContext) -> Result<ByteBuf, GadgetError>
         .current_call_id()
         .await
         .map_err(|e| KeygenError::ContextError(e.to_string()))?;
-
-    let (meta_hash, deterministic_hash) =
-        crate::compute_deterministic_hashes(n, blueprint_id, call_id, KEYGEN_SALT);
 
     // Setup party information
     let (i, operators) = context
@@ -62,10 +58,14 @@ pub async fn keygen(n: u16, context: BlsContext) -> Result<ByteBuf, GadgetError>
         .map(|(j, (_, ecdsa))| (j as u16, ecdsa))
         .collect();
 
+    let n = parties.len() as u16;
     let i = i as u16;
 
+    let (meta_hash, deterministic_hash) =
+        crate::compute_deterministic_hashes(n, blueprint_id, call_id, KEYGEN_SALT);
+
     gadget_sdk::info!(
-        "Starting BLS Keygen for party {i}, n={n}, eid={}",
+        "Starting BLS Keygen for party {i}, n={n}, t={t}, eid={}",
         hex::encode(deterministic_hash)
     );
 
@@ -81,7 +81,7 @@ pub async fn keygen(n: u16, context: BlsContext) -> Result<ByteBuf, GadgetError>
     let output = crate::keygen_state_machine::bls_keygen_protocol(party, i, t, n, call_id).await?;
 
     gadget_sdk::info!(
-        "Ending BLS Keygen for party {i}, n={n}, eid={}",
+        "Ending BLS Keygen for party {i}, n={n}, t={t}, eid={}",
         hex::encode(deterministic_hash)
     );
 
@@ -94,7 +94,7 @@ pub async fn keygen(n: u16, context: BlsContext) -> Result<ByteBuf, GadgetError>
     let store_key = hex::encode(meta_hash);
     context.store.set(&store_key, output);
 
-    Ok(public_key.into())
+    Ok(public_key)
 }
 
 /// Configuration constants for the BLS keygen process
