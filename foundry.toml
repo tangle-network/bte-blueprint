@@ -5,9 +5,11 @@ out = "contracts/out"
 script = "contracts/script"
 cache_path = "contracts/cache"
 broadcast = "contracts/broadcast"
-libs = ["contracts/lib", "dependencies"]
+libs = ["dependencies"]
 auto_detect_remappings = true
 
 [dependencies]
+tnt-core = { version = "0.1.0", git = "https://github.com/tangle-network/tnt-core.git", rev = "dc71ca12f9b5d01b898adb2057c9b8846c90bda2" }
+forge-std = "1.9.4"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

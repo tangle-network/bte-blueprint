@@ -37,3 +37,4 @@ build/
 
 # Dependencies
 node_modules/
+dependencies/
