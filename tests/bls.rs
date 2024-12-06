@@ -7,7 +7,7 @@ mod e2e {
     use blueprint_test_utils::*;
 
     const N: usize = 3;
-    const T: usize = 3;
+    const T: usize = 2;
 
     // The macro takes this variable as an argument, and will update it so that
     // when we pass the signing arguments, we can pass the associated keygen call id
