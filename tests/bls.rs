@@ -17,7 +17,8 @@ async fn test_blueprint() {
     gadget_sdk::info!("Running BLS blueprint test");
     let tmp_dir = blueprint_test_utils::tempfile::TempDir::new().unwrap();
     let tmp_dir_path = tmp_dir.path().to_string_lossy().into_owned();
-    let node_config = NodeConfig::new(true);
+    let node_config = NodeConfig::new(false);
+
     new_test_ext_blueprint_manager::<N, 1, String, _, _>(
         tmp_dir_path,
         run_test_blueprint_manager,
