@@ -11,6 +11,9 @@ concurrency:
   group: rust-validation-${{ github.head_ref }}
   cancel-in-progress: true
 
+env:
+  RUST_LOG: "gadget=trace"
+
 jobs:
   fmt:
     name: Rustfmt
@@ -91,19 +94,10 @@ jobs:
         with:
           cache-on-failure: "true"
 
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: nextest
-
       - name: Forge build
         run: forge update && forge build
 
       - uses: taiki-e/github-actions/free-device-space@main
 
-      - name: Download Tangle Manual Sealing
-        run: |
-          wget https://github.com/tangle-network/tangle/releases/download/v1.2.3/tangle-testnet-manual-seal-linux-amd64
-          chmod +x tangle-testnet-manual-seal-linux-amd64
-
       - name: tests
-        run: TANGLE_NODE=$(pwd)/tangle-testnet-manual-seal-linux-amd64 cargo nextest run
+        run: cargo test -- --test-threads=1
