@@ -8,16 +8,12 @@ edition = "2021"
 manager = { Evm = "BlsBlueprint" }
 
 [dependencies]
-gadget-sdk = { git = "https://github.com/tangle-network/gadget", branch = "drew/download-binary", features = ["std"] }
+gadget-sdk = { git = "https://github.com/tangle-network/gadget.git", features = ["std"] }
 color-eyre = { version = "0.6", features = ["tracing-error", "color-spantrace"] }
 hex = { version = "0.4.3", default-features = false }
-k256 = { version = "0.13.3", default-features = false }
-bincode = "1.3.3"
 sp-core = { version = "31.0.0", default-features = false }
-rand_chacha = "0.3.1"
 serde = { version = "1.0.214", features = ["derive"] }
 round-based = { version = "0.3.2", features = ["runtime-tokio"] }
-tracing-subscriber = "0.3.18"
 thiserror = "2.0.3"
 itertools = "0.13.0"
 
@@ -27,13 +23,11 @@ snowbridge-milagro-bls = "1.5.4"
 gennaro-dkg = { version = "0.8.0", features = ["curve25519"]}
 
 [build-dependencies]
-blueprint-metadata = { git = "https://github.com/tangle-network/gadget", branch = "drew/download-binary" }
+blueprint-metadata = { git = "https://github.com/tangle-network/gadget.git" }
 
 [dev-dependencies]
-blueprint-test-utils = { git = "https://github.com/tangle-network/gadget", branch = "drew/download-binary" }
-cargo-tangle = { git = "https://github.com/tangle-network/gadget", branch = "drew/download-binary" }
+blueprint-test-utils = { git = "https://github.com/tangle-network/gadget.git" }
 tokio = { version = "1.42.0", features = ["test-util"] }
-#alloy-primitives = "0.7.2"
 
 [features]
 default = ["std"]
