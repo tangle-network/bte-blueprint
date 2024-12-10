@@ -24,6 +24,8 @@ const NETWORK_PROTOCOL: &str = "/bls/gennaro/1.0.0";
 pub struct BlsContext {
     #[config]
     pub config: sdk::config::StdGadgetConfiguration,
+    #[call_id]
+    pub call_id: Option<u64>,
     pub network_backend: Arc<NetworkMultiplexer>,
     pub store: Arc<LocalDatabase<BlsState>>,
     pub identity: ecdsa::Pair,
@@ -52,6 +54,7 @@ impl BlsContext {
         Ok(Self {
             store,
             identity,
+            call_id: None,
             config,
             network_backend: Arc::new(NetworkMultiplexer::new(gossip_handle)),
         })
