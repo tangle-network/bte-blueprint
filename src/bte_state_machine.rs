@@ -1,20 +1,22 @@
+use ark_ec::pairing::Pairing;
 use ark_ec::PrimeGroup;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::Zero;
+use batch_threshold::dealer::CRS;
+use batch_threshold::decryption::decrypt_all;
+use batch_threshold::encryption::Ciphertext;
 use batch_threshold::utils::lagrange_interp_eval;
 use itertools::Itertools;
 use round_based::rounds_router::{simple_store::RoundInput, RoundsRouter};
 use round_based::MessageDestination;
 use round_based::{Delivery, Mpc, MpcParty, PartyIndex, ProtocolMessage};
 use serde::{Deserialize, Serialize};
-use snowbridge_milagro_bls::{PublicKey, SecretKey, Signature};
 use std::collections::BTreeMap;
+
 // todo: replace the structs with E::G2, E::ScalarField, E::G1
 // e(sig, h) = e(H(m), vk)
-// use batch_threshold::
 
 use crate::elliptic_ark_bls::convert_bls_to_ark_bls_fr;
-use crate::hasher::hash_to_g1;
 use crate::keygen_state_machine::{BlsState, HasRecipient};
 use crate::signing::SigningError;
 
@@ -39,6 +41,21 @@ impl Default for BTEState {
     }
 }
 
+impl BTEState {
+    pub fn recover_messages(
+        &self,
+        ct: &Vec<Ciphertext<ark_bls12_381::Bls12_381>>,
+        hid: ark_bls12_381::G1Projective,
+        crs: &CRS<ark_bls12_381::Bls12_381>,
+    ) -> Vec<[u8; 32]> {
+        if self.secret_key.is_none() {
+            return vec![];
+        }
+        let sigma = self.signature.unwrap();
+        decrypt_all(sigma, ct, hid, crs)
+    }
+}
+
 #[derive(ProtocolMessage, Serialize, Deserialize, Clone)]
 pub enum Msg {
     Round1Broadcast(Msg1),
@@ -51,16 +68,15 @@ pub struct Msg1 {
     pub body: (Vec<u8>, Vec<u8>), // (signature_share, public_key_share)
 }
 
-pub async fn bte_pd_protocol<M, T>(
+pub async fn bte_pd_protocol<M>(
     party: M,
     i: PartyIndex,
     n: u16,
     state: &mut BlsState,
-    input_data_to_sign: T,
+    delta: ark_bls12_381::G1Projective,
 ) -> Result<BTEState, SigningError>
 where
     M: Mpc<ProtocolMessage = Msg>,
-    T: AsRef<[u8]>,
 {
     let MpcParty { delivery, .. } = party.into_party();
     let (incomings, mut outgoings) = delivery.split();
@@ -83,13 +99,8 @@ where
     let ark_secret_key = convert_bls_to_ark_bls_fr(&secret_key);
     println!("ark_secret_key: {:?}", ark_secret_key);
 
-    // let secret_key = SecretKey::from_bytes(&secret_key.to_be_bytes())
-    //     .map_err(|e| SigningError::MpcError(format!("Failed to create secret key: {e:?}")))?;
-
     // Step 1: Generate shares
-    let sign_input = gadget_sdk::compute_sha256_hash!(input_data_to_sign.as_ref());
-    let sign_input_hash = hash_to_g1(&sign_input).unwrap();
-    let sig_share = sign_input_hash * ark_secret_key;
+    let sig_share = delta * ark_secret_key;
     let pk_share = ark_bls12_381::G2Projective::generator() * ark_secret_key;
 
     let mut sig_share_bytes = Vec::new();
@@ -160,29 +171,6 @@ where
 
     let pk_agg =
         lagrange_interp_eval(&eval_points, &vec![ark_bls12_381::Fr::zero()], &pk_shares)[0];
-    // let combined_signature = snowbridge_milagro_bls::AggregateSignature::aggregate(
-    //     &sig_shares.iter().collect::<Vec<_>>(),
-    // );
-
-    // let pk_agg = snowbridge_milagro_bls::AggregatePublicKey::aggregate(
-    //     &pk_shares.iter().collect::<Vec<_>>(),
-    // )
-    // .map_err(|e| SigningError::MpcError(format!("Failed to aggregate public keys: {e:?}")))?;
-
-    // let mut input = [0u8; 97];
-    // pk_agg.point.to_bytes(&mut input, false);
-
-    // let as_pk = PublicKey::from_uncompressed_bytes(&input[1..])
-    //     .map_err(|e| SigningError::MpcError(format!("Failed to create public key: {e:?}")))?;
-
-    // let as_sig = Signature::from_bytes(&combined_signature.as_bytes())
-    //     .map_err(|e| SigningError::MpcError(format!("Failed to create signature: {e:?}")))?;
-
-    // if !as_sig.verify(&sign_input, &as_pk) {
-    //     return Err(SigningError::MpcError(
-    //         "Failed to verify signature locally".to_string(),
-    //     ));
-    // }
 
     let mut sig_bytes = Vec::new();
     let mut pk_bytes = Vec::new();
@@ -193,8 +181,8 @@ where
 
     pk_agg.serialize_compressed(&mut pk_bytes).unwrap();
 
-    signing_state.public_key = Some(pk_bytes);
-    signing_state.signature = Some(sig_bytes);
+    signing_state.public_key = Some(pk_agg);
+    signing_state.signature = Some(combined_signature);
     signing_state.secret_key = Some(ark_secret_key);
 
     Ok(signing_state)
