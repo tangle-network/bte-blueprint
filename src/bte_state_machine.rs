@@ -1,13 +1,14 @@
-use std::collections::BTreeMap;
-
-use ark_ec::{pairing::Pairing, PrimeGroup};
+use ark_ec::PrimeGroup;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_std::Zero;
+use batch_threshold::utils::lagrange_interp_eval;
 use itertools::Itertools;
 use round_based::rounds_router::{simple_store::RoundInput, RoundsRouter};
 use round_based::MessageDestination;
 use round_based::{Delivery, Mpc, MpcParty, PartyIndex, ProtocolMessage};
 use serde::{Deserialize, Serialize};
 use snowbridge_milagro_bls::{PublicKey, SecretKey, Signature};
+use std::collections::BTreeMap;
 // todo: replace the structs with E::G2, E::ScalarField, E::G1
 // e(sig, h) = e(H(m), vk)
 // use batch_threshold::
@@ -150,6 +151,15 @@ where
         .map(|r| r.1)
         .collect::<Vec<_>>();
 
+    let eval_points = (0..n)
+        .map(|i| ark_bls12_381::Fr::from((i + 1) as u64))
+        .collect::<Vec<_>>();
+
+    let combined_signature =
+        lagrange_interp_eval(&eval_points, &vec![ark_bls12_381::Fr::zero()], &sig_shares)[0];
+
+    let pk_agg =
+        lagrange_interp_eval(&eval_points, &vec![ark_bls12_381::Fr::zero()], &pk_shares)[0];
     // let combined_signature = snowbridge_milagro_bls::AggregateSignature::aggregate(
     //     &sig_shares.iter().collect::<Vec<_>>(),
     // );
@@ -174,13 +184,20 @@ where
     //     ));
     // }
 
-    // signing_state.public_key = Some(as_pk.as_uncompressed_bytes().to_vec());
-    // signing_state.signature = Some(as_sig.as_bytes().to_vec());
-    // signing_state.secret_key = Some(secret_key);
+    let mut sig_bytes = Vec::new();
+    let mut pk_bytes = Vec::new();
 
-    // Ok(signing_state)
+    combined_signature
+        .serialize_compressed(&mut sig_bytes)
+        .unwrap();
 
-    todo!()
+    pk_agg.serialize_compressed(&mut pk_bytes).unwrap();
+
+    signing_state.public_key = Some(pk_bytes);
+    signing_state.signature = Some(sig_bytes);
+    signing_state.secret_key = Some(ark_secret_key);
+
+    Ok(signing_state)
 }
 
 impl HasRecipient for Msg {
