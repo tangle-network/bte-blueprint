@@ -19,10 +19,12 @@ async fn main() {
     let tangle_config = TangleConfig::default();
     let keygen = bls_blueprint::keygen::KeygenEventHandler::new(&env, context.clone()).await?;
     let signing = bls_blueprint::signing::SignEventHandler::new(&env, context.clone()).await?;
+    let bte = bls_blueprint::bte::BteEventHandler::new(&env, context.clone()).await?;
 
     BlueprintRunner::new(tangle_config, env.clone())
         .job(keygen)
         .job(signing)
+        .job(bte)
         .run()
         .await?;
 

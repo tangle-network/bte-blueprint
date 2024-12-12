@@ -78,6 +78,8 @@ pub async fn bte_pd_protocol<M>(
 where
     M: Mpc<ProtocolMessage = Msg>,
 {
+    println!("Running BTE PD protocol");
+
     let MpcParty { delivery, .. } = party.into_party();
     let (incomings, mut outgoings) = delivery.split();
     let mut signing_state = BTEState::default();
@@ -118,6 +120,7 @@ where
         body: (sig_share_bytes, pk_share_bytes),
     };
 
+    println!("prepared msg");
     // Step 2: Broadcast shares
     let msg = Msg::Round1Broadcast(my_msg.clone());
 
@@ -144,6 +147,8 @@ where
             .received_sig_shares
             .insert(sender as usize, sig);
     }
+
+    println!("received_pk_shares: {:?}", signing_state.received_pk_shares);
 
     // Step 4: Verify the combined signatures and public keys
     let sig_shares = signing_state
