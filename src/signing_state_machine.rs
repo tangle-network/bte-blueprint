@@ -134,6 +134,8 @@ where
     let as_pk = PublicKey::from_uncompressed_bytes(&input[1..])
         .map_err(|e| SigningError::MpcError(format!("Failed to create public key: {e:?}")))?;
 
+    println!("as_pk_x: {:?}", as_pk.point.getx());
+
     let as_sig = Signature::from_bytes(&combined_signature.as_bytes())
         .map_err(|e| SigningError::MpcError(format!("Failed to create signature: {e:?}")))?;
 
