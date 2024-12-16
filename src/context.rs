@@ -29,6 +29,7 @@ pub struct BlsContext {
     pub network_backend: Arc<NetworkMultiplexer>,
     pub store: Arc<LocalDatabase<BlsState>>,
     pub identity: ecdsa::Pair,
+    pub crs: batch_threshold::dealer::CRS<ark_bls12_381::Bls12_381>,
 }
 
 // Core context management implementation
@@ -51,12 +52,18 @@ impl BlsContext {
         let keystore_dir = PathBuf::from(config.keystore_uri.clone()).join("bls.json");
         let store = Arc::new(LocalDatabase::open(keystore_dir));
 
+        // todo: read the crs from file
+        let batch_size = 32;
+        let mut dealer = batch_threshold::dealer::Dealer::new(batch_size, 1, 1);
+        let (crs, _) = dealer.setup(&mut ark_std::test_rng());
+
         Ok(Self {
             store,
             identity,
             call_id: None,
             config,
             network_backend: Arc::new(NetworkMultiplexer::new(gossip_handle)),
+            crs,
         })
     }
 

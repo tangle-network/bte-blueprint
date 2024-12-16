@@ -1,8 +1,10 @@
 use std::collections::BTreeMap;
 
-use crate::context::BlsContext;
+use crate::{context::BlsContext, elliptic_ark_bls::convert_bls_to_ark_bls_g1};
 use ark_ec::PrimeGroup;
+use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 use ark_serialize::CanonicalSerialize;
+use batch_threshold::encryption::Ciphertext;
 use gadget_sdk::{
     event_listener::tangle::{
         jobs::{services_post_processor, services_pre_processor},
@@ -113,6 +115,33 @@ pub async fn bte(
     );
 
     let party = round_based::party::MpcParty::connected(network);
+
+    // create dummy ciphertexts and get a partial decryption for the batch
+
+    let batch_size = context.crs.powers_of_g.len();
+    println!("batch_size: {}", batch_size);
+    let tx_domain = Radix2EvaluationDomain::<ark_bls12_381::Fr>::new(batch_size).unwrap();
+
+    let msg = [1u8; 32];
+    let hid = ark_bls12_381::G1Projective::generator();
+
+    let as_pk = snowbridge_milagro_bls::PublicKey::from_uncompressed_bytes(
+        &state.uncompressed_pk.clone().unwrap()[1..],
+    )
+    .map_err(|e| SigningError::MpcError(format!("Failed to create public key: {e:?}")))?;
+
+    assert!(as_pk.key_validate());
+    println!("as_pk: {:?}", as_pk);
+    // let ark_pk = convert_bls_to_ark_bls_g1(&as_pk.point);
+    // println!("ark_pk: {:?}", ark_pk);
+
+    // generate ciphertexts for all points in tx_domain
+    // let mut ct: Vec<Ciphertext<ark_bls12_381::Bls12_381>> = Vec::new();
+    // for x in tx_domain.elements() {
+    //     ct.push(batch_threshold::encryption::encrypt::<
+    //         ark_bls12_381::Bls12_381,
+    //     >(msg, x, hid, context.crs.htau, pk));
+    // }
 
     // todo: update this
     let delta = ark_bls12_381::G1Projective::generator();

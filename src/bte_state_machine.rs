@@ -1,4 +1,3 @@
-use ark_ec::pairing::Pairing;
 use ark_ec::PrimeGroup;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::Zero;
@@ -120,7 +119,6 @@ where
         body: (sig_share_bytes, pk_share_bytes),
     };
 
-    println!("prepared msg");
     // Step 2: Broadcast shares
     let msg = Msg::Round1Broadcast(my_msg.clone());
 
@@ -147,8 +145,6 @@ where
             .received_sig_shares
             .insert(sender as usize, sig);
     }
-
-    println!("received_pk_shares: {:?}", signing_state.received_pk_shares);
 
     // Step 4: Verify the combined signatures and public keys
     let sig_shares = signing_state
