@@ -1,3 +1,4 @@
+use ark_ec::pairing::Pairing;
 use ark_ec::{CurveGroup, PrimeGroup};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::Zero;
@@ -72,13 +73,12 @@ pub async fn bte_pd_protocol<M>(
     i: PartyIndex,
     n: u16,
     state: &mut BlsState,
-    delta: ark_bls12_381::G1Projective,
+    ct: &Vec<Ciphertext<ark_bls12_381::Bls12_381>>,
+    crs: &CRS<ark_bls12_381::Bls12_381>,
 ) -> Result<BTEState, SigningError>
 where
     M: Mpc<ProtocolMessage = Msg>,
 {
-    println!("Running BTE PD protocol");
-
     let MpcParty { delivery, .. } = party.into_party();
     let (incomings, mut outgoings) = delivery.split();
     let mut signing_state = BTEState::default();
@@ -95,28 +95,30 @@ where
         .get_secret_share()
         .ok_or_else(|| SigningError::KeyRetrievalError("Failed to get secret share".to_string()))?;
 
-    println!("secret_key: {:?}", secret_key);
-
     let ark_secret_key = convert_bls_to_ark_bls_fr(&secret_key);
-    println!("ark_secret_key: {:?}", ark_secret_key);
 
     // Step 1: Generate shares
-    let sig_share = delta * ark_secret_key;
-    let pk_share = ark_bls12_381::G2Projective::generator() * ark_secret_key;
+    // let sig_share = delta * ark_secret_key;
+
+    let pk = ark_bls12_381::G2Projective::deserialize_compressed(
+        &*state.uncompressed_pk.clone().unwrap(),
+    )
+    .unwrap();
+
+    let bte_sk: batch_threshold::decryption::SecretKey<ark_bls12_381::Bls12_381> =
+        batch_threshold::decryption::SecretKey::new(ark_secret_key);
+    let sig_share = bte_sk.partial_decrypt(&ct, ark_bls12_381::G1Projective::generator(), pk, crs);
 
     let mut sig_share_bytes = Vec::new();
-    let mut pk_share_bytes = Vec::new();
 
     sig_share
         .serialize_compressed(&mut sig_share_bytes)
         .unwrap();
 
-    pk_share.serialize_compressed(&mut pk_share_bytes).unwrap();
-
     let my_msg = Msg1 {
         sender: i,
         receiver: None,
-        body: (sig_share_bytes, pk_share_bytes),
+        body: (sig_share_bytes, vec![]),
     };
 
     // Step 2: Broadcast shares
@@ -137,8 +139,7 @@ where
         .map_err(|e| SigningError::MpcError(format!("Failed to complete round: {}", e)))?;
 
     for msg in msgs.into_vec_including_me(my_msg) {
-        let (sender, (sig, pk)) = (msg.sender, msg.body);
-        let pk = ark_bls12_381::G2Projective::deserialize_compressed(&*pk).unwrap();
+        let (sender, (sig, _)) = (msg.sender, msg.body);
         let sig = ark_bls12_381::G1Projective::deserialize_compressed(&*sig).unwrap();
         signing_state.received_pk_shares.insert(sender as usize, pk);
         signing_state
@@ -155,37 +156,40 @@ where
         .map(|r| r.1)
         .collect::<Vec<_>>();
 
-    let pk_shares = signing_state
-        .received_pk_shares
-        .clone()
-        .into_iter()
-        .sorted_by_key(|r| r.0)
-        .map(|r| r.1)
-        .collect::<Vec<_>>();
+    let combined_signature = sig_shares
+        .iter()
+        .fold(ark_bls12_381::G1Projective::zero(), |acc, x| acc + x);
 
-    let eval_points = (0..n)
-        .map(|i| ark_bls12_381::Fr::from((i + 1) as u64))
-        .collect::<Vec<_>>();
+    // verify the signature
+    // let lhs = ark_bls12_381::Bls12_381::pairing(
+    //     combined_signature,
+    //     ark_bls12_381::G2Projective::generator(),
+    // );
 
-    let combined_signature =
-        lagrange_interp_eval(&eval_points, &vec![ark_bls12_381::Fr::zero()], &sig_shares)[0];
+    // let rhs = ark_bls12_381::Bls12_381::pairing(ark_bls12_381::G1Projective::from(delta), pk_agg);
 
-    let pk_agg =
-        lagrange_interp_eval(&eval_points, &vec![ark_bls12_381::Fr::zero()], &pk_shares)[0];
+    // assert_eq!(lhs, rhs, "Signature verification failed");
 
-    println!("combined_signature: {:?}", combined_signature);
-    println!("pk_agg: {:?}", pk_agg);
+    // TODO: make this a threshold version
+    // let eval_points = (0..n)
+    //     .map(|i| ark_bls12_381::Fr::from((i + 1) as u64))
+    //     .collect::<Vec<_>>();
+
+    // let combined_signature =
+    //     lagrange_interp_eval(&eval_points, &vec![ark_bls12_381::Fr::zero()], &sig_shares)[0];
+
+    // let pk_agg =
+    //     lagrange_interp_eval(&eval_points, &vec![ark_bls12_381::Fr::zero()], &pk_shares)[0];
+
+    // println!("pk_agg: {:?}", pk_agg.into_affine());
 
     let mut sig_bytes = Vec::new();
-    let mut pk_bytes = Vec::new();
 
     combined_signature
         .serialize_compressed(&mut sig_bytes)
         .unwrap();
 
-    pk_agg.serialize_compressed(&mut pk_bytes).unwrap();
-
-    signing_state.public_key = Some(pk_agg);
+    signing_state.public_key = Some(pk);
     signing_state.signature = Some(combined_signature);
     signing_state.secret_key = Some(ark_secret_key);
 

@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use crate::{context::BlsContext, elliptic_ark_bls::convert_bls_to_ark_bls_g1};
-use ark_ec::PrimeGroup;
+use ark_ec::{CurveGroup, PrimeGroup};
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
-use ark_serialize::CanonicalSerialize;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use batch_threshold::encryption::Ciphertext;
 use gadget_sdk::{
     event_listener::tangle::{
@@ -125,28 +125,24 @@ pub async fn bte(
     let msg = [1u8; 32];
     let hid = ark_bls12_381::G1Projective::generator();
 
-    // let as_pk = snowbridge_milagro_bls::PublicKey::from_uncompressed_bytes(
-    //     &state.uncompressed_pk.clone().unwrap()[1..],
-    // )
-    // .map_err(|e| SigningError::MpcError(format!("Failed to create public key: {e:?}")))?;
-
-    // assert!(as_pk.key_validate());
-    // println!("as_pk: {:?}", as_pk);
-    // let ark_pk = convert_bls_to_ark_bls_g1(&as_pk.point);
-    // println!("ark_pk: {:?}", ark_pk);
+    let pk = ark_bls12_381::G2Projective::deserialize_compressed(
+        &*state.uncompressed_pk.clone().unwrap(),
+    )
+    .unwrap();
 
     // generate ciphertexts for all points in tx_domain
-    // let mut ct: Vec<Ciphertext<ark_bls12_381::Bls12_381>> = Vec::new();
-    // for x in tx_domain.elements() {
-    //     ct.push(batch_threshold::encryption::encrypt::<
-    //         ark_bls12_381::Bls12_381,
-    //     >(msg, x, hid, context.crs.htau, pk));
-    // }
+    let mut ct: Vec<Ciphertext<ark_bls12_381::Bls12_381>> = Vec::new();
+    for x in tx_domain.elements() {
+        ct.push(batch_threshold::encryption::encrypt::<
+            ark_bls12_381::Bls12_381,
+        >(msg, x, hid, context.crs.htau, pk));
+    }
 
-    // todo: update this
-    let delta = ark_bls12_381::G1Projective::generator();
+    let output =
+        crate::bte_state_machine::bte_pd_protocol(party, i, n, &mut state, &ct, &context.crs)
+            .await?;
 
-    let output = crate::bte_state_machine::bte_pd_protocol(party, i, n, &mut state, delta).await?;
+    // finish decryption
 
     gadget_sdk::info!(
         "Ending BLS Signing for party {i}, n={n}, t={t}, eid={}",

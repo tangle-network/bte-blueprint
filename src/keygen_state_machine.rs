@@ -392,14 +392,13 @@ where
         .serialize_compressed(&mut key_share_bytes)
         .unwrap();
 
-    let mut my_broadcast = Msg5 {
+    let my_broadcast = Msg5 {
         source: i,
         data: key_share_bytes,
     };
     let broadcast_msg = Msg::Round5Broadcast(my_broadcast.clone());
     send_message::<M, Msg>(broadcast_msg.clone(), tx).await?;
 
-    my_broadcast.source += 1; // adjust for 1-indexed gennaro
     let round5_broadcasts = rounds
         .complete(round5)
         .await
@@ -418,15 +417,6 @@ where
             })?;
 
         received_pk_shares.insert(*id, pk);
-
-        // match snowbridge_milagro_bls::PublicKey::from_uncompressed_bytes(key_share) {
-        //     Ok(pk) => {
-        //         received_pk_shares.insert(*id, pk);
-        //     }
-        //     Err(e) => {
-        //         gadget_sdk::warn!("Failed to deserialize public key: {e:?}");
-        //     }
-        // }
     }
 
     let pk_shares = received_pk_shares
@@ -440,23 +430,12 @@ where
         .iter()
         .fold(ark_bls12_381::G2Projective::zero(), |acc, x| acc + x);
 
-    // println!("pk_agg: {:?}", pk_agg.into_affine());
-
-    // let pk_agg = snowbridge_milagro_bls::AggregatePublicKey::aggregate(
-    //     &pk_shares.iter().collect::<Vec<_>>(),
-    // )
-    // .map_err(|e| KeygenError::MpcError(format!("Failed to aggregate public keys: {e:?}")))?;
-
     let mut pk_agg_bytes = Vec::new();
     pk_agg
         .serialize_compressed(&mut pk_agg_bytes)
         .map_err(|e| KeygenError::MpcError(format!("Failed to serialize public key: {e:?}")))?;
 
     state.uncompressed_pk = Some(pk_agg_bytes);
-
-    // let uncompressed_public_key = &mut [0u8; 97];
-    // pk_agg.point.to_bytes(uncompressed_public_key, false);
-    // state.uncompressed_pk = Some(uncompressed_public_key.to_vec());
 
     gadget_sdk::info!(
         "[BLS] Received {} messages from round 5",
