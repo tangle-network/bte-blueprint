@@ -440,7 +440,7 @@ where
         .iter()
         .fold(ark_bls12_381::G2Projective::zero(), |acc, x| acc + x);
 
-    println!("pk_agg: {:?}", pk_agg.into_affine());
+    // println!("pk_agg: {:?}", pk_agg.into_affine());
 
     // let pk_agg = snowbridge_milagro_bls::AggregatePublicKey::aggregate(
     //     &pk_shares.iter().collect::<Vec<_>>(),

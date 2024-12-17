@@ -119,19 +119,19 @@ pub async fn bte(
     // create dummy ciphertexts and get a partial decryption for the batch
 
     let batch_size = context.crs.powers_of_g.len();
-    println!("batch_size: {}", batch_size);
+    // println!("batch_size: {}", batch_size);
     let tx_domain = Radix2EvaluationDomain::<ark_bls12_381::Fr>::new(batch_size).unwrap();
 
     let msg = [1u8; 32];
     let hid = ark_bls12_381::G1Projective::generator();
 
-    let as_pk = snowbridge_milagro_bls::PublicKey::from_uncompressed_bytes(
-        &state.uncompressed_pk.clone().unwrap()[1..],
-    )
-    .map_err(|e| SigningError::MpcError(format!("Failed to create public key: {e:?}")))?;
+    // let as_pk = snowbridge_milagro_bls::PublicKey::from_uncompressed_bytes(
+    //     &state.uncompressed_pk.clone().unwrap()[1..],
+    // )
+    // .map_err(|e| SigningError::MpcError(format!("Failed to create public key: {e:?}")))?;
 
-    assert!(as_pk.key_validate());
-    println!("as_pk: {:?}", as_pk);
+    // assert!(as_pk.key_validate());
+    // println!("as_pk: {:?}", as_pk);
     // let ark_pk = convert_bls_to_ark_bls_g1(&as_pk.point);
     // println!("ark_pk: {:?}", ark_pk);
 

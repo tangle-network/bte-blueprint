@@ -1,4 +1,4 @@
-use ark_ec::PrimeGroup;
+use ark_ec::{CurveGroup, PrimeGroup};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::Zero;
 use batch_threshold::dealer::CRS;
@@ -172,6 +172,9 @@ where
 
     let pk_agg =
         lagrange_interp_eval(&eval_points, &vec![ark_bls12_381::Fr::zero()], &pk_shares)[0];
+
+    println!("combined_signature: {:?}", combined_signature);
+    println!("pk_agg: {:?}", pk_agg);
 
     let mut sig_bytes = Vec::new();
     let mut pk_bytes = Vec::new();
