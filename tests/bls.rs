@@ -1,3 +1,4 @@
+use ark_ec::CurveGroup;
 use bls_blueprint::bte::BTE_JOB_ID;
 use bls_blueprint::keygen::KEYGEN_JOB_ID;
 use bls_blueprint::signing::SIGN_JOB_ID;
@@ -5,6 +6,7 @@ use bls_blueprint::signing::SIGN_JOB_ID;
 const N: usize = 3;
 const T: usize = 2;
 
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use blueprint_test_utils::tangle::NodeConfig;
 use blueprint_test_utils::test_ext::new_test_ext_blueprint_manager;
 use blueprint_test_utils::{
@@ -63,6 +65,24 @@ async fn test_blueprint() {
 
         assert_eq!(job_results.service_id, service_id);
         assert_eq!(job_results.call_id, keygen_call_id);
+
+        let bounded_vec = job_results.result[0].clone();
+        let pk_bytes: Vec<u8> = match bounded_vec {
+            InputValue::List(BoundedVec(vec)) => vec
+                .into_iter()
+                .map(|v| match v {
+                    InputValue::Uint8(byte) => byte,
+                    _ => panic!("Unexpected type in BoundedVec"),
+                })
+                .collect(),
+            _ => panic!("Expected BoundedVec"),
+        };
+        let pk: ark_bls12_381::G2Projective =
+            ark_bls12_381::G2Projective::deserialize_compressed(&pk_bytes[..])
+                .expect("Failed to deserialize public key");
+
+        println!("pk_bytes: {:?}", pk_bytes);
+        println!("pk: {:?}", pk.into_affine());
 
         let expected_outputs = vec![];
         if !expected_outputs.is_empty() {

@@ -435,6 +435,8 @@ where
         .serialize_compressed(&mut pk_agg_bytes)
         .map_err(|e| KeygenError::MpcError(format!("Failed to serialize public key: {e:?}")))?;
 
+    println!("pk_agg: {:?}", pk_agg_bytes);
+
     state.uncompressed_pk = Some(pk_agg_bytes);
 
     gadget_sdk::info!(
