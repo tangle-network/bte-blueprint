@@ -38,7 +38,7 @@ impl From<SigningError> for GadgetError {
 
 #[job(
     id = 2,
-    params(keygen_call_id, message),
+    params(keygen_call_id, ct),
     event_listener(
         listener = TangleEventListener<BlsContext, JobCalled>,
         pre_processor = services_pre_processor,
@@ -61,7 +61,7 @@ impl From<SigningError> for GadgetError {
 /// - Signing process failed
 pub async fn bte(
     keygen_call_id: u64,
-    message: Vec<u8>,
+    ct: Vec<u8>,
     context: BlsContext,
 ) -> Result<Vec<u8>, GadgetError> {
     // Get configuration and compute deterministic values

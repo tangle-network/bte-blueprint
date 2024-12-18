@@ -1,3 +1,4 @@
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use color_eyre::eyre;
 use gadget_sdk as sdk;
 use gadget_sdk::ext::subxt::tx::Signer;
@@ -9,10 +10,12 @@ use sdk::contexts::{KeystoreContext, ServicesContext, TangleClientContext};
 use sdk::tangle_subxt::tangle_testnet_runtime::api;
 use sp_core::ecdsa::Public;
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::keygen_state_machine::BlsState;
+use std::fs::File;
+use std::io::Read;
 
 /// The network protocol version for the BLS service
 const NETWORK_PROTOCOL: &str = "/bls/gennaro/1.0.0";
@@ -54,8 +57,32 @@ impl BlsContext {
 
         // todo: read the crs from file
         let batch_size = 32;
-        let mut dealer = batch_threshold::dealer::Dealer::new(batch_size, 1, 1);
-        let (crs, _) = dealer.setup(&mut ark_std::test_rng());
+
+        let crs_path = "crs.dat";
+        let crs = if Path::new(crs_path).exists() {
+            println!("Reading CRS from file");
+            let mut crs_file = File::open(crs_path)
+                .map_err(|err| eyre::eyre!("Failed to open CRS file: {err}"))?;
+            let mut crs_bytes = Vec::new();
+            crs_file
+                .read_to_end(&mut crs_bytes)
+                .map_err(|err| eyre::eyre!("Failed to read CRS file: {err}"))?;
+
+            batch_threshold::dealer::CRS::<ark_bls12_381::Bls12_381>::deserialize_compressed(
+                &crs_bytes[..],
+            )
+            .map_err(|err| eyre::eyre!("Failed to deserialize CRS: {err}"))?
+        } else {
+            let mut dealer = batch_threshold::dealer::Dealer::new(batch_size, 1, 1);
+            let (crs, _) = dealer.setup(&mut ark_std::test_rng());
+            let mut crs_bytes = Vec::new();
+            crs.serialize_compressed(&mut crs_bytes)
+                .map_err(|err| eyre::eyre!("Failed to serialize CRS: {err}"))?;
+
+            std::fs::write(&crs_path, crs_bytes)
+                .map_err(|err| eyre::eyre!("Failed to write CRS file: {err}"))?;
+            crs
+        };
 
         Ok(Self {
             store,

@@ -1,4 +1,9 @@
-use ark_ec::CurveGroup;
+use std::fs::File;
+use std::io::Read;
+
+use ark_ec::{CurveGroup, PrimeGroup};
+use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
+use batch_threshold::encryption::Ciphertext;
 use bls_blueprint::bte::BTE_JOB_ID;
 use bls_blueprint::keygen::KEYGEN_JOB_ID;
 use bls_blueprint::signing::SIGN_JOB_ID;
@@ -13,6 +18,7 @@ use blueprint_test_utils::{
     get_next_call_id, run_test_blueprint_manager, setup_log, submit_job,
     wait_for_completion_of_tangle_job, BoundedVec, InputValue, Job,
 };
+use color_eyre::eyre;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_blueprint() {
@@ -83,6 +89,32 @@ async fn test_blueprint() {
 
         println!("pk_bytes: {:?}", pk_bytes);
         println!("pk: {:?}", pk.into_affine());
+
+        let crs_path = "crs.dat";
+
+        println!("Reading CRS from file in test");
+        let mut crs_file = File::open(crs_path).unwrap();
+        let mut crs_bytes = Vec::new();
+        crs_file.read_to_end(&mut crs_bytes).unwrap();
+
+        let crs = batch_threshold::dealer::CRS::<ark_bls12_381::Bls12_381>::deserialize_compressed(
+            &crs_bytes[..],
+        )
+        .unwrap();
+
+        // generate ciphertexts for all points in tx_domain
+        let batch_size = 32;
+        let tx_domain = Radix2EvaluationDomain::<ark_bls12_381::Fr>::new(batch_size).unwrap();
+
+        let msg = [1u8; 32];
+        let hid = ark_bls12_381::G1Projective::generator();
+
+        let mut ct: Vec<Ciphertext<ark_bls12_381::Bls12_381>> = Vec::new();
+        for x in tx_domain.elements() {
+            ct.push(batch_threshold::encryption::encrypt::<
+                ark_bls12_381::Bls12_381,
+            >(msg, x, hid, crs.htau, pk));
+        }
 
         let expected_outputs = vec![];
         if !expected_outputs.is_empty() {
