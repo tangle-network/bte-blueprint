@@ -87,9 +87,6 @@ async fn test_blueprint() {
             ark_bls12_381::G2Projective::deserialize_compressed(&pk_bytes[..])
                 .expect("Failed to deserialize public key");
 
-        println!("pk_bytes: {:?}", pk_bytes);
-        println!("pk: {:?}", pk.into_affine());
-
         let crs_path = "crs.dat";
 
         println!("Reading CRS from file in test");
@@ -115,6 +112,11 @@ async fn test_blueprint() {
                 ark_bls12_381::Bls12_381,
             >(msg, x, hid, crs.htau, pk));
         }
+
+        let mut ct_bytes = Vec::new();
+        ct.serialize_compressed(&mut ct_bytes).unwrap();
+
+        // println!("ct_bytes: {:?}", ct_bytes);
 
         let expected_outputs = vec![];
         if !expected_outputs.is_empty() {
@@ -201,13 +203,11 @@ async fn test_blueprint() {
             BTE_JOB_ID
         );
 
+        let input_ct: Vec<_> = ct_bytes.iter().map(|b| InputValue::Uint8(*b)).collect();
+        println!("input_ct: {}", input_ct.len());
         let job_args = vec![
             InputValue::Uint64(keygen_call_id),
-            InputValue::List(BoundedVec(vec![
-                InputValue::Uint8(1),
-                InputValue::Uint8(2),
-                InputValue::Uint8(3),
-            ])),
+            InputValue::List(BoundedVec(input_ct)),
         ];
 
         let job = submit_job(

@@ -38,7 +38,7 @@ impl From<SigningError> for GadgetError {
 
 #[job(
     id = 2,
-    params(keygen_call_id, ct),
+    params(keygen_call_id, ct_bytes),
     event_listener(
         listener = TangleEventListener<BlsContext, JobCalled>,
         pre_processor = services_pre_processor,
@@ -61,7 +61,7 @@ impl From<SigningError> for GadgetError {
 /// - Signing process failed
 pub async fn bte(
     keygen_call_id: u64,
-    ct: Vec<u8>,
+    ct_bytes: Vec<u8>,
     context: BlsContext,
 ) -> Result<Vec<u8>, GadgetError> {
     // Get configuration and compute deterministic values
@@ -115,6 +115,10 @@ pub async fn bte(
     );
 
     let party = round_based::party::MpcParty::connected(network);
+
+    // serialize ciphertexts
+    // let ct: Vec<Ciphertext<ark_bls12_381::Bls12_381>> =
+    //     Vec::<Ciphertext<ark_bls12_381::Bls12_381>>::deserialize_compressed(&*ct_bytes).unwrap();
 
     // create dummy ciphertexts and get a partial decryption for the batch
 
