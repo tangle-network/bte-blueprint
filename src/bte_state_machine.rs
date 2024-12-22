@@ -1,11 +1,9 @@
-use ark_ec::pairing::Pairing;
-use ark_ec::{CurveGroup, PrimeGroup};
+use ark_ec::PrimeGroup;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::Zero;
 use batch_threshold::dealer::CRS;
 use batch_threshold::decryption::decrypt_all;
 use batch_threshold::encryption::Ciphertext;
-use batch_threshold::utils::lagrange_interp_eval;
 use itertools::Itertools;
 use round_based::rounds_router::{simple_store::RoundInput, RoundsRouter};
 use round_based::MessageDestination;

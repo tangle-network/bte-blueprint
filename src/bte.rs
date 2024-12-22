@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use crate::{context::BlsContext, elliptic_ark_bls::convert_bls_to_ark_bls_g1};
-use ark_ec::{CurveGroup, PrimeGroup};
+use crate::context::BlsContext;
+use ark_ec::PrimeGroup;
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use batch_threshold::encryption::Ciphertext;
@@ -116,30 +116,25 @@ pub async fn bte(
 
     let party = round_based::party::MpcParty::connected(network);
 
-    // serialize ciphertexts
-    // let ct: Vec<Ciphertext<ark_bls12_381::Bls12_381>> =
-    //     Vec::<Ciphertext<ark_bls12_381::Bls12_381>>::deserialize_compressed(&*ct_bytes).unwrap();
-
-    // create dummy ciphertexts and get a partial decryption for the batch
-
     let batch_size = context.crs.powers_of_g.len();
-    // println!("batch_size: {}", batch_size);
     let tx_domain = Radix2EvaluationDomain::<ark_bls12_381::Fr>::new(batch_size).unwrap();
 
     let msg = [1u8; 32];
     let hid = ark_bls12_381::G1Projective::generator();
-
     let pk = ark_bls12_381::G2Projective::deserialize_compressed(
         &*state.uncompressed_pk.clone().unwrap(),
     )
     .unwrap();
 
-    // generate ciphertexts for all points in tx_domain
+    // generate dummy ciphertexts for all points in tx_domain
+    // todo: need to get the ciphertexts from an RPC end point instead
+    // currently using a deterministic rng
+    let rng = &mut ark_std::test_rng();
     let mut ct: Vec<Ciphertext<ark_bls12_381::Bls12_381>> = Vec::new();
     for x in tx_domain.elements() {
         ct.push(batch_threshold::encryption::encrypt::<
             ark_bls12_381::Bls12_381,
-        >(msg, x, hid, context.crs.htau, pk));
+        >(msg, x, hid, context.crs.htau, pk, rng));
     }
 
     let output =
@@ -147,6 +142,10 @@ pub async fn bte(
             .await?;
 
     // finish decryption
+    let recovered_msg = output.recover_messages(&ct, hid, &context.crs);
+    for i in 0..batch_size {
+        assert_eq!(recovered_msg[i], msg);
+    }
 
     gadget_sdk::info!(
         "Ending BLS Signing for party {i}, n={n}, t={t}, eid={}",

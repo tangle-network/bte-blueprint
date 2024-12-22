@@ -8,13 +8,8 @@ edition = "2021"
 manager = { Evm = "BlsBlueprint" }
 
 [dependencies]
-gadget-sdk = { git = "https://github.com/tangle-network/gadget.git", features = [
-    "std",
-] }
-color-eyre = { version = "0.6", features = [
-    "tracing-error",
-    "color-spantrace",
-] }
+gadget-sdk = { git = "https://github.com/tangle-network/gadget.git", features = ["std"] }
+color-eyre = { version = "0.6", features = ["tracing-error", "color-spantrace"] }
 hex = { version = "0.4.3", default-features = false }
 sp-core = { version = "31.0.0", default-features = false }
 serde = { version = "1.0.214", features = ["derive"] }
@@ -28,20 +23,13 @@ snowbridge-milagro-bls = "1.5.4"
 gennaro-dkg = { version = "0.8.0", features = ["curve25519"] }
 
 # batch threshold deps
-batch-threshold = { git = "https://github.com/guruvamsi-policharla/batched-threshold-pp" }
+batch-threshold = { git = "https://github.com/guruvamsi-policharla/batched-threshold-pp", rev = "974749c4d337fae4b5c4f741c62e680f83e6503a" }
 ark-poly = { version = "0.5.0", default-features = false }
 ark-ff = { version = "0.5.0", default-features = false }
 ark-ec = { version = "0.5.0", default-features = false }
-ark-std = { version = "0.5.0", default-features = false, features = [
-    "print-trace",
-    "std",
-] }
-ark-serialize = { version = "0.5.0", default-features = false, features = [
-    "derive",
-] }
-ark-bls12-381 = { version = "0.5.0", default-features = false, features = [
-    "curve",
-] }
+ark-std = { version = "0.5.0", default-features = false, features = ["print-trace", "std"] }
+ark-serialize = { version = "0.5.0", default-features = false, features = ["derive"] }
+ark-bls12-381 = { version = "0.5.0", default-features = false, features = ["curve"] }
 
 ff = { version = "0.13" }
 group = { version = "0.13" }

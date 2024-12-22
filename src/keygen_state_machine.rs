@@ -15,7 +15,7 @@ use std::num::NonZeroUsize;
 
 use crate::elliptic_ark_bls::convert_bls_to_ark_bls_fr;
 use crate::keygen::KeygenError;
-use ark_ec::{CurveGroup, PrimeGroup};
+use ark_ec::PrimeGroup;
 use ark_std::Zero;
 type Group = bls12_381_plus::G1Projective;
 
@@ -434,8 +434,6 @@ where
     pk_agg
         .serialize_compressed(&mut pk_agg_bytes)
         .map_err(|e| KeygenError::MpcError(format!("Failed to serialize public key: {e:?}")))?;
-
-    println!("pk_agg: {:?}", pk_agg_bytes);
 
     state.uncompressed_pk = Some(pk_agg_bytes);
 
