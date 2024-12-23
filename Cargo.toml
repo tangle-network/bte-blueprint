@@ -11,7 +11,7 @@ manager = { Evm = "BlsBlueprint" }
 gadget-sdk = { git = "https://github.com/tangle-network/gadget.git", features = ["std"] }
 color-eyre = { version = "0.6", features = ["tracing-error", "color-spantrace"] }
 hex = { version = "0.4.3", default-features = false }
-sp-core = { version = "31.0.0", default-features = false }
+sp-core = { version = "34.0.0", default-features = false }
 serde = { version = "1.0.214", features = ["derive"] }
 round-based = { version = "0.3.2", features = ["runtime-tokio"] }
 thiserror = "2.0.3"
