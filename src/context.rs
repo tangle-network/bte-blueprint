@@ -13,30 +13,30 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::keygen_state_machine::BlsState;
+use crate::keygen_state_machine::BteState;
 use std::fs::File;
 use std::io::Read;
 
 /// The network protocol version for the BLS service
 const NETWORK_PROTOCOL: &str = "/bls/gennaro/1.0.0";
 
-/// BLS Service Context that holds all the necessary context for the service
+/// BTE Service Context that holds all the necessary context for the service
 /// to run. This structure implements various traits for keystore, client, and service
 /// functionality.
 #[derive(Clone, KeystoreContext, TangleClientContext, ServicesContext)]
-pub struct BlsContext {
+pub struct BteContext {
     #[config]
     pub config: sdk::config::StdGadgetConfiguration,
     #[call_id]
     pub call_id: Option<u64>,
     pub network_backend: Arc<NetworkMultiplexer>,
-    pub store: Arc<LocalDatabase<BlsState>>,
+    pub store: Arc<LocalDatabase<BteState>>,
     pub identity: ecdsa::Pair,
     pub crs: batch_threshold::dealer::CRS<ark_bls12_381::Bls12_381>,
 }
 
 // Core context management implementation
-impl BlsContext {
+impl BteContext {
     /// Creates a new service context with the provided configuration
     ///
     /// # Errors
@@ -102,7 +102,7 @@ impl BlsContext {
 
     /// Returns a clone of the store handle
     #[inline]
-    pub fn store(&self) -> Arc<LocalDatabase<BlsState>> {
+    pub fn store(&self) -> Arc<LocalDatabase<BteState>> {
         self.store.clone()
     }
 
@@ -114,7 +114,7 @@ impl BlsContext {
 }
 
 // Protocol-specific implementations
-impl BlsContext {
+impl BteContext {
     /// Retrieves the current blueprint ID from the configuration
     ///
     /// # Errors

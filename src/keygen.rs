@@ -1,4 +1,4 @@
-use crate::context::BlsContext;
+use crate::context::BteContext;
 use gadget_sdk::{
     event_listener::tangle::{
         jobs::{services_post_processor, services_pre_processor},
@@ -16,12 +16,12 @@ use std::collections::BTreeMap;
     id = 0,
     params(t),
     event_listener(
-        listener = TangleEventListener<BlsContext, JobCalled>,
+        listener = TangleEventListener<BteContext, JobCalled>,
         pre_processor = services_pre_processor,
         post_processor = services_post_processor,
     ),
 )]
-/// Runs a distributed key generation (DKG) process using the BLS protocol
+/// Runs a distributed key generation (DKG) process for the BTE protocol
 ///
 /// # Arguments
 /// * `t` - Threshold value for the DKG process
@@ -36,7 +36,7 @@ use std::collections::BTreeMap;
 /// - Failed to get party information
 /// - MPC protocol execution failed
 /// - Serialization of results failed
-pub async fn keygen(t: u16, context: BlsContext) -> Result<Vec<u8>, GadgetError> {
+pub async fn keygen(t: u16, context: BteContext) -> Result<Vec<u8>, GadgetError> {
     // Get configuration and compute deterministic values
     let blueprint_id = context
         .blueprint_id()
@@ -65,7 +65,7 @@ pub async fn keygen(t: u16, context: BlsContext) -> Result<Vec<u8>, GadgetError>
         crate::compute_deterministic_hashes(n, blueprint_id, call_id, KEYGEN_SALT);
 
     gadget_sdk::info!(
-        "Starting BLS Keygen for party {i}, n={n}, t={t}, eid={}",
+        "Starting BTE Keygen for party {i}, n={n}, t={t}, eid={}",
         hex::encode(deterministic_hash)
     );
 
@@ -78,10 +78,10 @@ pub async fn keygen(t: u16, context: BlsContext) -> Result<Vec<u8>, GadgetError>
 
     let party = round_based::party::MpcParty::connected(network);
 
-    let output = crate::keygen_state_machine::bls_keygen_protocol(party, i, t, n, call_id).await?;
+    let output = crate::keygen_state_machine::bte_keygen_protocol(party, i, t, n, call_id).await?;
 
     gadget_sdk::info!(
-        "Ending BLS Keygen for party {i}, n={n}, t={t}, eid={}",
+        "Ending BTE Keygen for party {i}, n={n}, t={t}, eid={}",
         hex::encode(deterministic_hash)
     );
 
@@ -97,7 +97,7 @@ pub async fn keygen(t: u16, context: BlsContext) -> Result<Vec<u8>, GadgetError>
     Ok(public_key)
 }
 
-/// Configuration constants for the BLS keygen process
+/// Configuration constants for the BTE keygen process
 const KEYGEN_SALT: &str = "bls-keygen";
 
 /// Error type for keygen-specific operations

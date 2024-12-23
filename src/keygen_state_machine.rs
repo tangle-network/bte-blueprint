@@ -20,7 +20,7 @@ use ark_std::Zero;
 type Group = bls12_381_plus::G1Projective;
 
 #[derive(Default, Serialize, Deserialize, Clone)]
-pub struct BlsState {
+pub struct BteState {
     round1_broadcasts: BTreeMap<usize, Round1BroadcastData<Group>>,
     round1_p2p: BTreeMap<usize, Round1P2PData>,
     round2_broadcasts: BTreeMap<usize, Round2EchoBroadcastData>,
@@ -33,9 +33,9 @@ pub struct BlsState {
     pub t: u16,
 }
 
-impl BlsState {
+impl BteState {
     pub fn new(call_id: u64, t: u16) -> Self {
-        BlsState {
+        BteState {
             call_id,
             t,
             ..Default::default()
@@ -87,20 +87,20 @@ pub struct Msg5 {
     data: Vec<u8>,
 }
 
-pub async fn bls_keygen_protocol<M>(
+pub async fn bte_keygen_protocol<M>(
     party: M,
     i: PartyIndex,
     t: u16,
     n: u16,
     call_id: u64,
-) -> Result<BlsState, KeygenError>
+) -> Result<BteState, KeygenError>
 where
     M: Mpc<ProtocolMessage = Msg>,
 {
     let MpcParty { delivery, .. } = party.into_party();
 
     let (incomings, mut outgoings) = delivery.split();
-    let mut state = BlsState::new(call_id, t);
+    let mut state = BteState::new(call_id, t);
 
     let i = NonZeroUsize::new((i + 1) as usize).expect("I > 0");
     let n = NonZeroUsize::new(n as usize).expect("N > 0");
@@ -193,10 +193,6 @@ where
     let share = convert_bls_to_ark_bls_fr(&sk);
     let pk_share = ark_bls12_381::G2Projective::generator() * share;
 
-    // let share = snowbridge_milagro_bls::SecretKey::from_bytes(&sk.to_be_bytes())
-    //     .map_err(|e| KeygenError::MpcError(format!("Failed to create secret key: {e:?}")))?;
-    // let pk_share = snowbridge_milagro_bls::PublicKey::from_secret_key(&share);
-
     // Broadcast the key, aggregate shared pk
     round5_broadcast::<M>(
         i,
@@ -216,7 +212,7 @@ async fn round1_broadcast<M>(
     i: u16,
     round1_broadcast_data: Round1BroadcastData<Group>,
     tx: &mut <<M as Mpc>::Delivery as Delivery<Msg>>::Send,
-    state: &mut BlsState,
+    state: &mut BteState,
     rounds: &mut RoundsRouter<Msg, <<M as Mpc>::Delivery as Delivery<Msg>>::Receive>,
     round1: Round<RoundInput<Msg1>>,
 ) -> Result<(), KeygenError>
@@ -248,7 +244,7 @@ async fn round1_p2p<M>(
     i: u16,
     round1_p2p_data: BTreeMap<usize, Round1P2PData>,
     tx: &mut <<M as Mpc>::Delivery as Delivery<Msg>>::Send,
-    state: &mut BlsState,
+    state: &mut BteState,
     rounds: &mut RoundsRouter<Msg, <<M as Mpc>::Delivery as Delivery<Msg>>::Receive>,
     round1_p2p: Round<RoundInput<Msg1P2P>>,
 ) -> Result<(), KeygenError>
@@ -284,7 +280,7 @@ async fn round2_broadcast<M>(
     i: u16,
     round2_broadcast_data: Round2EchoBroadcastData,
     tx: &mut <<M as Mpc>::Delivery as Delivery<Msg>>::Send,
-    state: &mut BlsState,
+    state: &mut BteState,
     rounds: &mut RoundsRouter<Msg, <<M as Mpc>::Delivery as Delivery<Msg>>::Receive>,
     round2: Round<RoundInput<Msg2>>,
 ) -> Result<(), KeygenError>
@@ -316,7 +312,7 @@ async fn round3_broadcast<M>(
     i: u16,
     round3_broadcast_data: Round3BroadcastData<Group>,
     tx: &mut <<M as Mpc>::Delivery as Delivery<Msg>>::Send,
-    state: &mut BlsState,
+    state: &mut BteState,
     rounds: &mut RoundsRouter<Msg, <<M as Mpc>::Delivery as Delivery<Msg>>::Receive>,
     round3: Round<RoundInput<Msg3>>,
 ) -> Result<(), KeygenError>
@@ -348,7 +344,7 @@ async fn round4_broadcast<M>(
     i: u16,
     round4_broadcast_data: Round4EchoBroadcastData<Group>,
     tx: &mut <<M as Mpc>::Delivery as Delivery<Msg>>::Send,
-    state: &mut BlsState,
+    state: &mut BteState,
     rounds: &mut RoundsRouter<Msg, <<M as Mpc>::Delivery as Delivery<Msg>>::Receive>,
     round4: Round<RoundInput<Msg4>>,
 ) -> Result<(), KeygenError>
@@ -380,7 +376,7 @@ async fn round5_broadcast<M>(
     i: u16,
     round5_broadcast_data: ark_bls12_381::G2Projective,
     tx: &mut <<M as Mpc>::Delivery as Delivery<Msg>>::Send,
-    state: &mut BlsState,
+    state: &mut BteState,
     rounds: &mut RoundsRouter<Msg, <<M as Mpc>::Delivery as Delivery<Msg>>::Receive>,
     round5: Round<RoundInput<Msg5>>,
 ) -> Result<(), KeygenError>

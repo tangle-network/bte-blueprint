@@ -1,5 +1,5 @@
-use bls_blueprint::bte::BTE_JOB_ID;
-use bls_blueprint::keygen::KEYGEN_JOB_ID;
+use bte_blueprint::bte::BTE_JOB_ID;
+use bte_blueprint::keygen::KEYGEN_JOB_ID;
 
 const N: usize = 3;
 const T: usize = 2;
@@ -14,8 +14,7 @@ use blueprint_test_utils::{
 #[tokio::test(flavor = "multi_thread")]
 async fn test_blueprint() {
     setup_log();
-    gadget_sdk::info!("Running BLS blueprint test");
-    println!("Running BLS blueprint test");
+    gadget_sdk::info!("Running BTE blueprint test");
     let tmp_dir = blueprint_test_utils::tempfile::TempDir::new().unwrap();
     let tmp_dir_path = tmp_dir.path().to_string_lossy().into_owned();
     let node_config = NodeConfig::new(true);
@@ -63,7 +62,7 @@ async fn test_blueprint() {
         assert_eq!(job_results.service_id, service_id);
         assert_eq!(job_results.call_id, keygen_call_id);
 
-        let bounded_vec = job_results.result[0].clone();
+        // let bounded_vec = job_results.result[0].clone();
         // let pk_bytes: Vec<u8> = match bounded_vec {
         //     InputValue::List(BoundedVec(vec)) => vec
         //         .into_iter()

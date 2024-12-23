@@ -11,12 +11,9 @@ use round_based::{Delivery, Mpc, MpcParty, PartyIndex, ProtocolMessage};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-// todo: replace the structs with E::G2, E::ScalarField, E::G1
-// e(sig, h) = e(H(m), vk)
-
+use crate::bte::SigningError;
 use crate::elliptic_ark_bls::convert_bls_to_ark_bls_fr;
-use crate::keygen_state_machine::{BlsState, HasRecipient};
-use crate::signing::SigningError;
+use crate::keygen_state_machine::{BteState, HasRecipient};
 
 #[derive(Clone)]
 pub struct BTEState {
@@ -70,7 +67,7 @@ pub async fn bte_pd_protocol<M>(
     party: M,
     i: PartyIndex,
     n: u16,
-    state: &mut BlsState,
+    state: &mut BteState,
     ct: &Vec<Ciphertext<ark_bls12_381::Bls12_381>>,
     crs: &CRS<ark_bls12_381::Bls12_381>,
 ) -> Result<BTEState, SigningError>

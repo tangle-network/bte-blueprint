@@ -1,11 +1,11 @@
 [package]
-name = "bls-blueprint"
-version = "0.1.1"
-description = "A BLS Blueprint that can run keygen and signing jobs on demand from the Tangle network"
+name = "bte-blueprint"
+version = "0.1.0"
+description = "A BTE Blueprint that can run keygen and decryption jobs"
 edition = "2021"
 
 [package.metadata.blueprint]
-manager = { Evm = "BlsBlueprint" }
+manager = { Evm = "BteBlueprint" }
 
 [dependencies]
 gadget-sdk = { git = "https://github.com/tangle-network/gadget.git", features = ["std"] }

@@ -2,14 +2,11 @@ pub mod bte;
 pub(crate) mod bte_state_machine;
 pub mod context;
 pub mod elliptic_ark_bls;
-pub mod hasher;
 pub mod keygen;
 pub(crate) mod keygen_state_machine;
-pub mod signing;
-pub(crate) mod signing_state_machine;
 
-const META_SALT: &str = "bls-protocol";
-/// Helper function to compute deterministic hashes for the BLS processes.
+const META_SALT: &str = "bte-protocol";
+/// Helper function to compute deterministic hashes for the BTE processes.
 /// Note: for signing, the "call_id" should be the call_id of the preceeding
 /// keygen job
 pub fn compute_deterministic_hashes(

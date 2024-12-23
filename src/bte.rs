@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::context::BlsContext;
+use crate::context::BteContext;
 use ark_ec::PrimeGroup;
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -27,8 +27,8 @@ pub enum SigningError {
     MpcError(String),
 }
 
-/// Configuration constants for the BLS signing process
-const SIGNING_SALT: &str = "bls-signing";
+/// Configuration constants for the BTE signing process
+const SIGNING_SALT: &str = "bte-signing";
 
 impl From<SigningError> for GadgetError {
     fn from(err: SigningError) -> Self {
@@ -37,18 +37,17 @@ impl From<SigningError> for GadgetError {
 }
 
 #[job(
-    id = 2,
-    params(keygen_call_id, ct_bytes),
+    id = 1,
+    params(keygen_call_id, _ct_bytes),
     event_listener(
-        listener = TangleEventListener<BlsContext, JobCalled>,
+        listener = TangleEventListener<BteContext, JobCalled>,
         pre_processor = services_pre_processor,
         post_processor = services_post_processor,
     ),
 )]
-/// Signs a message using the BLS protocol with a previously generated key
+/// Decrypt a batch of message using the BTE protocol with a previously generated key
 ///
 /// # Arguments
-/// * `message` - The message to sign as a byte vector
 /// * `context` - The DFNS context containing network and storage configuration
 ///
 /// # Returns
@@ -61,8 +60,8 @@ impl From<SigningError> for GadgetError {
 /// - Signing process failed
 pub async fn bte(
     keygen_call_id: u64,
-    ct_bytes: Vec<u8>,
-    context: BlsContext,
+    _ct_bytes: Vec<u8>,
+    context: BteContext,
 ) -> Result<Vec<u8>, GadgetError> {
     // Get configuration and compute deterministic values
     let blueprint_id = context
@@ -103,7 +102,7 @@ pub async fn bte(
     let t = state.t;
 
     gadget_sdk::info!(
-        "Starting BLS Signing for party {i}, n={n}, t={t}, eid={}",
+        "Starting BTE partial decryption for party {i}, n={n}, t={t}, eid={}",
         hex::encode(deterministic_hash)
     );
 
@@ -148,7 +147,7 @@ pub async fn bte(
     }
 
     gadget_sdk::info!(
-        "Ending BLS Signing for party {i}, n={n}, t={t}, eid={}",
+        "Ending BTE partial decryption for party {i}, n={n}, t={t}, eid={}",
         hex::encode(deterministic_hash)
     );
 
