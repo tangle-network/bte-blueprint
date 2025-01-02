@@ -155,8 +155,10 @@ pub async fn bte(
         >(msg, x, hid.into(), context.crs.htau, pk, rng));
     }
 
+    let mut ct_bytes = Vec::new();
+    ct.serialize_compressed(&mut ct_bytes).unwrap();
+
     // download ciphertexts using cast call 0xb4B46bdAA835F8E4b4d8e208B6559cD267851051 "getData(uint64 index)" eid --rpc-url "http://127.0.0.1:32845"
-    println!("Downloading ciphertexts from the contract");
     let rpc_url = "http://127.0.0.1:32845";
     let provider = Provider::<Http>::try_from(rpc_url).unwrap();
 
