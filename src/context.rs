@@ -73,6 +73,7 @@ impl BteContext {
             )
             .map_err(|err| eyre::eyre!("Failed to deserialize CRS: {err}"))?
         } else {
+            // todo: change this to download a crs that has been setup via a decentralized process
             let mut dealer = batch_threshold::dealer::Dealer::new(batch_size, 1, 1);
             let (crs, _) = dealer.setup(&mut ark_std::test_rng());
             let mut crs_bytes = Vec::new();

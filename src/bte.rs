@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::context::BteContext;
 use ark_ec::PrimeGroup;
+use ark_ff::field_hashers::DefaultFieldHasher;
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use batch_threshold::encryption::Ciphertext;
@@ -15,8 +16,14 @@ use gadget_sdk::{
     tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled,
     Error as GadgetError,
 };
+use sha3::Keccak256;
 use sp_core::ecdsa::Public;
 use thiserror::Error;
+
+use ark_ec::hashing::{
+    curve_maps::wb::WBMap, map_to_curve_hasher::MapToCurveBasedHasher, HashToCurve,
+};
+
 #[derive(Debug, Error)]
 pub enum SigningError {
     #[error("Context error: {0}")]
@@ -38,7 +45,7 @@ impl From<SigningError> for GadgetError {
 
 #[job(
     id = 1,
-    params(keygen_call_id, _ct_bytes),
+    params(keygen_call_id, eid),
     event_listener(
         listener = TangleEventListener<BteContext, JobCalled>,
         pre_processor = services_pre_processor,
@@ -60,7 +67,7 @@ impl From<SigningError> for GadgetError {
 /// - Signing process failed
 pub async fn bte(
     keygen_call_id: u64,
-    _ct_bytes: Vec<u8>,
+    eid: u64,
     context: BteContext,
 ) -> Result<Vec<u8>, GadgetError> {
     // Get configuration and compute deterministic values
@@ -119,7 +126,16 @@ pub async fn bte(
     let tx_domain = Radix2EvaluationDomain::<ark_bls12_381::Fr>::new(batch_size).unwrap();
 
     let msg = [1u8; 32];
-    let hid = ark_bls12_381::G1Projective::generator();
+    // hash eid to G1 get hid
+    let hasher = MapToCurveBasedHasher::<
+        ark_bls12_381::G1Projective,
+        DefaultFieldHasher<Keccak256>,
+        WBMap<ark_bls12_381::g1::Config>,
+    >::new(b"")
+    .unwrap();
+
+    let hid = hasher.hash(&eid.to_le_bytes()).unwrap();
+
     let pk = ark_bls12_381::G2Projective::deserialize_compressed(
         &*state.uncompressed_pk.clone().unwrap(),
     )
@@ -133,15 +149,17 @@ pub async fn bte(
     for x in tx_domain.elements() {
         ct.push(batch_threshold::encryption::encrypt::<
             ark_bls12_381::Bls12_381,
-        >(msg, x, hid, context.crs.htau, pk, rng));
+        >(msg, x, hid.into(), context.crs.htau, pk, rng));
     }
 
+    // download ciphertexts using cast call 0xb4B46bdAA835F8E4b4d8e208B6559cD267851051 "getData(uint64 index)" eid --rpc-url "http://127.0.0.1:32845"
+
     let output =
-        crate::bte_state_machine::bte_pd_protocol(party, i, n, &mut state, &ct, &context.crs)
+        crate::bte_state_machine::bte_pd_protocol(party, i, n, &mut state, &ct, &context.crs, eid)
             .await?;
 
     // finish decryption
-    let recovered_msg = output.recover_messages(&ct, hid, &context.crs);
+    let recovered_msg = output.recover_messages(&ct, hid.into(), &context.crs);
     for i in 0..batch_size {
         assert_eq!(recovered_msg[i], msg);
     }

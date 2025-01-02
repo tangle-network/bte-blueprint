@@ -103,10 +103,7 @@ async fn test_blueprint() {
             BTE_JOB_ID
         );
 
-        let job_args = vec![
-            InputValue::Uint64(keygen_call_id),
-            InputValue::List(BoundedVec(vec![InputValue::Uint8(1); 1000])),
-        ];
+        let job_args = vec![InputValue::Uint64(keygen_call_id), InputValue::Uint64(1)];
 
         let job = submit_job(
             client,

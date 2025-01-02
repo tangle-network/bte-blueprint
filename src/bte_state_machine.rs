@@ -1,4 +1,8 @@
+use ark_ec::hashing::curve_maps::wb::WBMap;
+use ark_ec::hashing::map_to_curve_hasher::MapToCurveBasedHasher;
+use ark_ec::hashing::HashToCurve;
 use ark_ec::PrimeGroup;
+use ark_ff::field_hashers::DefaultFieldHasher;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::Zero;
 use batch_threshold::dealer::CRS;
@@ -9,6 +13,7 @@ use round_based::rounds_router::{simple_store::RoundInput, RoundsRouter};
 use round_based::MessageDestination;
 use round_based::{Delivery, Mpc, MpcParty, PartyIndex, ProtocolMessage};
 use serde::{Deserialize, Serialize};
+use sha3::Keccak256;
 use std::collections::BTreeMap;
 
 use crate::bte::SigningError;
@@ -70,6 +75,7 @@ pub async fn bte_pd_protocol<M>(
     state: &mut BteState,
     ct: &Vec<Ciphertext<ark_bls12_381::Bls12_381>>,
     crs: &CRS<ark_bls12_381::Bls12_381>,
+    eid: u64,
 ) -> Result<BTEState, SigningError>
 where
     M: Mpc<ProtocolMessage = Msg>,
@@ -102,7 +108,18 @@ where
 
     let bte_sk: batch_threshold::decryption::SecretKey<ark_bls12_381::Bls12_381> =
         batch_threshold::decryption::SecretKey::new(ark_secret_key);
-    let sig_share = bte_sk.partial_decrypt(&ct, ark_bls12_381::G1Projective::generator(), pk, crs);
+
+    // hash eid to G1 get hid
+    let hasher = MapToCurveBasedHasher::<
+        ark_bls12_381::G1Projective,
+        DefaultFieldHasher<Keccak256>,
+        WBMap<ark_bls12_381::g1::Config>,
+    >::new(b"")
+    .unwrap();
+
+    let hid = hasher.hash(&eid.to_le_bytes()).unwrap();
+
+    let sig_share = bte_sk.partial_decrypt(&ct, hid.into(), pk, crs);
 
     let mut sig_share_bytes = Vec::new();
 
