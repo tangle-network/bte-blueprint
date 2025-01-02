@@ -1,7 +1,6 @@
 use ark_ec::hashing::curve_maps::wb::WBMap;
 use ark_ec::hashing::map_to_curve_hasher::MapToCurveBasedHasher;
 use ark_ec::hashing::HashToCurve;
-use ark_ec::PrimeGroup;
 use ark_ff::field_hashers::DefaultFieldHasher;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::Zero;

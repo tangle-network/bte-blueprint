@@ -1,11 +1,15 @@
 use std::collections::BTreeMap;
 
 use crate::context::BteContext;
-use ark_ec::PrimeGroup;
+use abi::Abi;
+use ark_ec::hashing::{
+    curve_maps::wb::WBMap, map_to_curve_hasher::MapToCurveBasedHasher, HashToCurve,
+};
 use ark_ff::field_hashers::DefaultFieldHasher;
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use batch_threshold::encryption::Ciphertext;
+use ethers::prelude::*;
 use gadget_sdk::{
     event_listener::tangle::{
         jobs::{services_post_processor, services_pre_processor},
@@ -16,13 +20,12 @@ use gadget_sdk::{
     tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled,
     Error as GadgetError,
 };
+
+use serde_json::Value;
 use sha3::Keccak256;
 use sp_core::ecdsa::Public;
+use std::convert::TryFrom;
 use thiserror::Error;
-
-use ark_ec::hashing::{
-    curve_maps::wb::WBMap, map_to_curve_hasher::MapToCurveBasedHasher, HashToCurve,
-};
 
 #[derive(Debug, Error)]
 pub enum SigningError {
@@ -153,6 +156,41 @@ pub async fn bte(
     }
 
     // download ciphertexts using cast call 0xb4B46bdAA835F8E4b4d8e208B6559cD267851051 "getData(uint64 index)" eid --rpc-url "http://127.0.0.1:32845"
+    println!("Downloading ciphertexts from the contract");
+    let rpc_url = "http://127.0.0.1:32845";
+    let provider = Provider::<Http>::try_from(rpc_url).unwrap();
+
+    // read the json file stored in /Users/vamsi/Github/bte-blueprint/contracts/out/SecureStorage.sol/SecureStorage.json
+    let json_path =
+        "/Users/vamsi/Github/bte-blueprint/contracts/out/SecureStorage.sol/SecureStorage.json";
+
+    // Read the JSON file
+    let json = std::fs::read_to_string(json_path)
+        .map_err(|e| SigningError::ContextError(e.to_string()))?;
+
+    // Parse the JSON as a map
+    let parsed_json: Value = serde_json::from_str(&json).unwrap();
+
+    // Get the ABI from the JSON
+    let abi: Abi = serde_json::from_value(parsed_json["abi"].clone()).unwrap();
+
+    // Define the contract address
+    let contract_address = "0xb4B46bdAA835F8E4b4d8e208B6559cD267851051"
+        .parse::<Address>()
+        .unwrap();
+
+    // Create a new contract instance
+    let contract = Contract::new(contract_address, abi, provider.into());
+
+    // // Call the `dataStore` mapping with key 42
+    let value: Bytes = contract
+        .method::<_, Bytes>("dataStore", eid)
+        .unwrap()
+        .call()
+        .await
+        .unwrap();
+
+    println!("Value: {:?}", value);
 
     let output =
         crate::bte_state_machine::bte_pd_protocol(party, i, n, &mut state, &ct, &context.crs, eid)

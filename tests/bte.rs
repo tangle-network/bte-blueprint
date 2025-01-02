@@ -8,7 +8,7 @@ use blueprint_test_utils::tangle::NodeConfig;
 use blueprint_test_utils::test_ext::new_test_ext_blueprint_manager;
 use blueprint_test_utils::{
     get_next_call_id, run_test_blueprint_manager, setup_log, submit_job,
-    wait_for_completion_of_tangle_job, BoundedVec, InputValue, Job,
+    wait_for_completion_of_tangle_job, InputValue, Job,
 };
 
 #[tokio::test(flavor = "multi_thread")]
