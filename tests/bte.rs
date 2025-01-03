@@ -137,8 +137,7 @@ async fn test_blueprint() {
 
         let provider = Provider::<Http>::try_from(rpc_url).unwrap();
 
-        let json_path =
-            "/Users/vamsi/Github/bte-blueprint/contracts/out/SecureStorage.sol/SecureStorage.json";
+        let json_path = "contracts/out/SecureStorage.sol/SecureStorage.json";
         let json = std::fs::read_to_string(json_path).unwrap();
         let parsed_json: Value = serde_json::from_str(&json).unwrap();
         let abi: Abi = serde_json::from_value(parsed_json["abi"].clone()).unwrap();
@@ -151,20 +150,27 @@ async fn test_blueprint() {
         let contract_address = contract_address.trim(); // Remove any trailing newline characters
         let contract_address = contract_address.parse::<Address>().unwrap();
 
+        let chain_id = provider.get_chainid().await.unwrap();
+        let wallet: LocalWallet =
+            "39725efee3fb28614de3bacaffe4cc4bd8c436257e2c8bb887c4b5c4be45e76d"
+                .parse::<LocalWallet>()
+                .unwrap()
+                .with_chain_id(chain_id.as_u64());
+
+        let eth_client = SignerMiddleware::new(provider.clone(), wallet);
+
         // Create a new contract instance
-        let contract = Contract::new(contract_address, abi, provider.clone().into());
+        let contract = Contract::new(contract_address, abi, eth_client.clone().into());
 
         // Retrieve the `currentIndex`
-        let cur_eid: u64 = contract
+        let eid: u64 = contract
             .method::<_, u64>("currentIndex", ())
             .unwrap()
             .call()
             .await
             .unwrap();
 
-        println!("Current index: {:?}", cur_eid);
-
-        let eid = cur_eid + 1;
+        println!("Current index: {:?}", eid);
 
         let hasher = MapToCurveBasedHasher::<
             ark_bls12_381::G1Projective,
@@ -186,42 +192,18 @@ async fn test_blueprint() {
 
         let mut ct_bytes = Vec::new();
         ct.serialize_compressed(&mut ct_bytes).unwrap();
-        let ct_bytes = ct_bytes;
+        let ct_bytes = Bytes::from(ct_bytes);
 
         // cast send 0xb4B46bdAA835F8E4b4d8e208B6559cD267851051 "storeData(bytes memory data)" "0x$(printf '00%.0s' {1..17000})" --private-key bcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31 --rpc-url "http://127.0.0.1:32845"
-
-        let chain_id = provider.get_chainid().await.unwrap();
-        let wallet: LocalWallet =
-            "bcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31"
-                .parse::<LocalWallet>()
-                .unwrap()
-                .with_chain_id(chain_id.as_u64());
-
-        let signer_middleware = SignerMiddleware::new(provider, wallet);
-        let v: Vec<u8> = vec![];
         let fc = contract
-            .method::<_, ()>("storeData", (v,))
+            .method::<_, ()>("storeData", (ct_bytes,))
             .expect("Failed to create transaction");
 
-        let gas_estimate = fc.estimate_gas().await.unwrap();
-        println!("Estimated gas: {}", gas_estimate);
-
         // send it!
-        let pending_tx = signer_middleware
-            .send_transaction(fc.tx, None)
-            .await
-            .unwrap();
+        let pending_tx = eth_client.send_transaction(fc.tx, None).await.unwrap();
 
         // get the mined tx
-        let receipt = pending_tx.await.unwrap().unwrap();
-        let tx = signer_middleware
-            .get_transaction(receipt.transaction_hash)
-            .await
-            .unwrap()
-            .unwrap();
-
-        println!("Sent tx: {}\n", serde_json::to_string(&tx).unwrap());
-        println!("Tx receipt: {}", serde_json::to_string(&receipt).unwrap());
+        let _receipt = pending_tx.await.unwrap().unwrap();
 
         //////////////////////
         let service = &blueprint.services[0];

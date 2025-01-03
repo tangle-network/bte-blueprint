@@ -144,19 +144,7 @@ pub async fn bte(
     )
     .unwrap();
 
-    // generate dummy ciphertexts for all points in tx_domain
-    // todo: need to get the ciphertexts from an RPC end point instead
-    // currently using a deterministic rng
-    let rng = &mut ark_std::test_rng();
-    let mut ct: Vec<Ciphertext<ark_bls12_381::Bls12_381>> = Vec::new();
-    for x in tx_domain.elements() {
-        ct.push(batch_threshold::encryption::encrypt::<
-            ark_bls12_381::Bls12_381,
-        >(msg, x, hid.into(), context.crs.htau, pk, rng));
-    }
-
-    let mut ct_bytes = Vec::new();
-    ct.serialize_compressed(&mut ct_bytes).unwrap();
+    // get the ciphertexts from an RPC end point. Ideally the nodes operating the chain can just look at their local view
 
     // download ciphertexts using cast call 0xb4B46bdAA835F8E4b4d8e208B6559cD267851051 "getData(uint64 index)" eid --rpc-url "http://127.0.0.1:32845"
     let rpc_url_path = "rpc_url.txt";
@@ -164,9 +152,8 @@ pub async fn bte(
     let rpc_url = rpc_url.trim(); // Remove any trailing newline characters
     let provider = Provider::<Http>::try_from(rpc_url).unwrap();
 
-    // read the json file stored in /Users/vamsi/Github/bte-blueprint/contracts/out/SecureStorage.sol/SecureStorage.json
-    let json_path =
-        "/Users/vamsi/Github/bte-blueprint/contracts/out/SecureStorage.sol/SecureStorage.json";
+    // read the json file
+    let json_path = "contracts/out/SecureStorage.sol/SecureStorage.json";
 
     // Read the JSON file
     let json = std::fs::read_to_string(json_path)
@@ -190,14 +177,15 @@ pub async fn bte(
         Contract::new(contract_address, abi, provider.into());
 
     // Call the `dataStore` mapping
-    let value: Bytes = contract
+    let ct_bytes: Bytes = contract
         .method::<_, Bytes>("dataStore", eid)
         .unwrap()
         .call()
         .await
         .unwrap();
 
-    println!("Value: {:?}", value);
+    let ct = Vec::<Ciphertext<ark_bls12_381::Bls12_381>>::deserialize_compressed(&*ct_bytes.0)
+        .map_err(|e| SigningError::ContextError(e.to_string()))?;
 
     let output =
         crate::bte_state_machine::bte_pd_protocol(party, i, n, &mut state, &ct, &context.crs, eid)
