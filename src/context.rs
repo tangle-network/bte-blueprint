@@ -56,8 +56,6 @@ impl BteContext {
         let store = Arc::new(LocalDatabase::open(keystore_dir));
 
         // todo: read the crs from file
-        let batch_size = 32;
-
         let crs_path = "crs.dat";
         let crs = if Path::new(crs_path).exists() {
             println!("Reading CRS from file");
@@ -74,6 +72,7 @@ impl BteContext {
             .map_err(|err| eyre::eyre!("Failed to deserialize CRS: {err}"))?
         } else {
             // todo: change this to download a crs that has been setup via a decentralized process
+            let batch_size = 32;
             let mut dealer = batch_threshold::dealer::Dealer::new(batch_size, 1, 1);
             let (crs, _) = dealer.setup(&mut ark_std::test_rng());
             let mut crs_bytes = Vec::new();
