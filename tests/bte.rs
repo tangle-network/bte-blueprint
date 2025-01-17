@@ -1,5 +1,23 @@
+use abi::Abi;
+use ark_ec::hashing::curve_maps::wb::WBMap;
+use ark_ec::hashing::map_to_curve_hasher::MapToCurveBasedHasher;
+use ark_ec::hashing::HashToCurve;
+use ark_ff::field_hashers::DefaultFieldHasher;
+use ark_poly::EvaluationDomain;
+use ark_poly::Radix2EvaluationDomain;
+use ark_serialize::CanonicalDeserialize;
+use ark_serialize::CanonicalSerialize;
+use ark_serialize::Read;
+use batch_threshold::encryption::Ciphertext;
 use bte_blueprint::bte::BTE_JOB_ID;
 use bte_blueprint::keygen::KEYGEN_JOB_ID;
+
+use ethers::prelude::*;
+use ethers::providers::Http;
+use ethers::providers::Provider;
+use serde_json::Value;
+use sha3::Keccak256;
+use std::fs::File;
 
 const N: usize = 3;
 const T: usize = 2;
@@ -62,17 +80,20 @@ async fn test_blueprint() {
         assert_eq!(job_results.service_id, service_id);
         assert_eq!(job_results.call_id, keygen_call_id);
 
-        // let bounded_vec = job_results.result[0].clone();
-        // let pk_bytes: Vec<u8> = match bounded_vec {
-        //     InputValue::List(BoundedVec(vec)) => vec
-        //         .into_iter()
-        //         .map(|v| match v {
-        //             InputValue::Uint8(byte) => byte,
-        //             _ => panic!("Unexpected type in BoundedVec"),
-        //         })
-        //         .collect(),
-        //     _ => panic!("Expected BoundedVec"),
-        // };
+        let bounded_vec = job_results.result[0].clone();
+        let pk_bytes: Vec<u8> = match bounded_vec {
+            InputValue::List(BoundedVec(vec)) => vec
+                .into_iter()
+                .map(|v| match v {
+                    InputValue::Uint8(byte) => byte,
+                    _ => panic!("Unexpected type in BoundedVec"),
+                })
+                .collect(),
+            _ => panic!("Expected BoundedVec"),
+        };
+
+        let pk = ark_bls12_381::G2Projective::deserialize_compressed(&pk_bytes[..])
+            .expect("Failed to deserialize public key");
 
         let expected_outputs = vec![];
         if !expected_outputs.is_empty() {
@@ -95,6 +116,95 @@ async fn test_blueprint() {
 
         gadget_sdk::info!("Keygen job completed successfully! Moving on to signing ...");
 
+        // Creating dummy transactions and putting them on chain
+        let crs_path = "crs.dat";
+        let mut crs_file = File::open(crs_path).unwrap();
+        let mut crs_bytes = Vec::new();
+        crs_file.read_to_end(&mut crs_bytes).unwrap();
+
+        let crs = batch_threshold::dealer::CRS::<ark_bls12_381::Bls12_381>::deserialize_compressed(
+            &crs_bytes[..],
+        )
+        .unwrap();
+
+        let batch_size = crs.powers_of_g.len();
+        let tx_domain = Radix2EvaluationDomain::<ark_bls12_381::Fr>::new(batch_size).unwrap();
+
+        let rpc_url_path = "rpc_url.txt";
+        let rpc_url =
+            std::fs::read_to_string(rpc_url_path).expect("Failed to read RPC URL from file");
+        let rpc_url = rpc_url.trim(); // Remove any trailing newline characters
+
+        let provider = Provider::<Http>::try_from(rpc_url).unwrap();
+
+        let json_path = "contracts/out/SecureStorage.sol/SecureStorage.json";
+        let json = std::fs::read_to_string(json_path).unwrap();
+        let parsed_json: Value = serde_json::from_str(&json).unwrap();
+        let abi: Abi = serde_json::from_value(parsed_json["abi"].clone()).unwrap();
+
+        // Define the contract address
+        // read contract address from file deployed_address.txt
+        let contract_address_path = "deployed_address.txt";
+        let contract_address = std::fs::read_to_string(contract_address_path)
+            .expect("Failed to read contract address from file");
+        let contract_address = contract_address.trim(); // Remove any trailing newline characters
+        let contract_address = contract_address.parse::<Address>().unwrap();
+
+        let chain_id = provider.get_chainid().await.unwrap();
+        let wallet: LocalWallet =
+            "39725efee3fb28614de3bacaffe4cc4bd8c436257e2c8bb887c4b5c4be45e76d"
+                .parse::<LocalWallet>()
+                .unwrap()
+                .with_chain_id(chain_id.as_u64());
+
+        let eth_client = SignerMiddleware::new(provider.clone(), wallet);
+
+        // Create a new contract instance
+        let contract = Contract::new(contract_address, abi, eth_client.clone().into());
+
+        // Retrieve the `currentIndex`
+        let eid: u64 = contract
+            .method::<_, u64>("currentIndex", ())
+            .unwrap()
+            .call()
+            .await
+            .unwrap();
+
+        println!("Current index: {:?}", eid);
+
+        let hasher = MapToCurveBasedHasher::<
+            ark_bls12_381::G1Projective,
+            DefaultFieldHasher<Keccak256>,
+            WBMap<ark_bls12_381::g1::Config>,
+        >::new(b"")
+        .unwrap();
+
+        let hid = hasher.hash(&eid.to_le_bytes()).unwrap();
+
+        let rng = &mut ark_std::test_rng();
+        let msg = [1u8; 32];
+        let mut ct: Vec<Ciphertext<ark_bls12_381::Bls12_381>> = Vec::new();
+        for x in tx_domain.elements() {
+            ct.push(batch_threshold::encryption::encrypt::<
+                ark_bls12_381::Bls12_381,
+            >(msg, x, hid.into(), crs.htau, pk, rng));
+        }
+
+        let mut ct_bytes = Vec::new();
+        ct.serialize_compressed(&mut ct_bytes).unwrap();
+        let ct_bytes = Bytes::from(ct_bytes);
+
+        // cast send 0xb4B46bdAA835F8E4b4d8e208B6559cD267851051 "storeData(bytes memory data)" "0x$(printf '00%.0s' {1..17000})" --private-key bcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31 --rpc-url "http://127.0.0.1:32845"
+        let fc = contract
+            .method::<_, ()>("storeData", (ct_bytes,))
+            .expect("Failed to create transaction");
+
+        // send it!
+        let pending_tx = eth_client.send_transaction(fc.tx, None).await.unwrap();
+
+        // get the mined tx
+        let _receipt = pending_tx.await.unwrap().unwrap();
+
         //////////////////////
         let service = &blueprint.services[0];
         let service_id = service.id;
@@ -103,7 +213,7 @@ async fn test_blueprint() {
             BTE_JOB_ID
         );
 
-        let job_args = vec![InputValue::Uint64(keygen_call_id), InputValue::Uint64(1)];
+        let job_args = vec![InputValue::Uint64(keygen_call_id), InputValue::Uint64(eid)];
 
         let job = submit_job(
             client,
