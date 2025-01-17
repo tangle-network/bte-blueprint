@@ -16,7 +16,7 @@ serde = { version = "1.0.214", features = ["derive"] }
 serde_json = "1.0.120"
 round-based = { version = "0.3.2", features = ["runtime-tokio"] }
 thiserror = "2.0.3"
-itertools = "0.13.0"
+itertools = "0.14.0"
 ethers = { version = "2.0", features = ["rustls"] }
 
 # MPC specific deps
