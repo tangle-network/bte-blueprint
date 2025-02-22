@@ -1,17 +1,29 @@
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use color_eyre::eyre;
-use gadget_sdk as sdk;
-use gadget_sdk::ext::subxt::tx::Signer;
-use gadget_sdk::network::NetworkMultiplexer;
-use gadget_sdk::store::LocalDatabase;
-use gadget_sdk::subxt_core::ext::sp_core::ecdsa;
-use gadget_sdk::subxt_core::utils::AccountId32;
-use sdk::contexts::{KeystoreContext, ServicesContext, TangleClientContext};
+use blueprint_sdk as sdk;
+use blueprint_sdk::ext::subxt::tx::Signer;
+use blueprint_sdk::macros::core::Gadget;
+use blueprint_sdk::networking::service_handle::NetworkServiceHandle;
+use blueprint_sdk::networking::InstanceMsgPublicKey;
+use blueprint_sdk::stores::local_database::LocalDatabase;
+use sdk::clients::GadgetServicesClient;
+use sdk::config::GadgetConfiguration;
+use sdk::contexts::keystore::KeystoreContext;
+use sdk::contexts::tangle::TangleClientContext;
+use sdk::crypto::sp_core::SpSr25519;
+use sdk::crypto::tangle_pair_signer::sp_core;
+use sdk::keystore::backends::Backend;
+use sdk::logging;
+use sdk::macros::contexts::{KeystoreContext, ServicesContext, TangleClientContext};
+use sdk::tangle_subxt;
 use sdk::tangle_subxt::tangle_testnet_runtime::api;
+use sp_core::ecdsa;
 use sp_core::ecdsa::Public;
+use std::collections::btree_map::BTreeMap;
+use std::collections::hash_set::HashSet;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tangle_subxt::subxt_core::utils::AccountId32;
 
 use crate::keygen_state_machine::BteState;
 use std::fs::File;
@@ -26,13 +38,13 @@ const NETWORK_PROTOCOL: &str = "/bls/gennaro/1.0.0";
 #[derive(Clone, KeystoreContext, TangleClientContext, ServicesContext)]
 pub struct BteContext {
     #[config]
-    pub config: sdk::config::StdGadgetConfiguration,
+    pub config: GadgetConfiguration,
     #[call_id]
     pub call_id: Option<u64>,
-    pub network_backend: Arc<NetworkMultiplexer>,
     pub store: Arc<LocalDatabase<BteState>>,
     pub identity: ecdsa::Pair,
     pub crs: batch_threshold::dealer::CRS<ark_bls12_381::Bls12_381>,
+    pub network_handle: Arc<NetworkServiceHandle>,
 }
 
 // Core context management implementation
@@ -43,15 +55,20 @@ impl BteContext {
     /// Returns an error if:
     /// - Network initialization fails
     /// - Configuration is invalid
-    pub fn new(config: sdk::config::StdGadgetConfiguration) -> eyre::Result<Self> {
-        let network_config = config
-            .libp2p_network_config(NETWORK_PROTOCOL)
-            .map_err(|err| eyre::eyre!("Failed to create network configuration: {err}"))?;
+    pub fn new(config: GadgetConfiguration) -> eyre::Result<Self> {
+        let operator_keys: HashSet<InstanceMsgPublicKek> = config
+            .tangle_client()
+            .await?
+            .get_operators()
+            .await?
+            .values()
+            .map(|key| InstanceMsgPublicKey(*key))
+            .collect();
 
-        let identity = network_config.ecdsa_key.clone();
-        let gossip_handle = sdk::network::setup::start_p2p_network(network_config)
-            .map_err(|err| eyre::eyre!("Failed to start the P2P network: {err}"))?;
+        let network_config = config.libp2p_network_config(NETWORK_PROTOCOL)?;
+        let identity = network_config.instance_key_pair.0.clone();
 
+        let network_backend = config.libp2p_start_network(network_config, operator_keys)?;
         let keystore_dir = PathBuf::from(config.keystore_uri.clone()).join("bls.json");
         let store = Arc::new(LocalDatabase::open(keystore_dir));
 
@@ -89,14 +106,14 @@ impl BteContext {
             identity,
             call_id: None,
             config,
-            network_backend: Arc::new(NetworkMultiplexer::new(gossip_handle)),
+            network_handle: Arc::new(network_backend),
             crs,
         })
     }
 
     /// Returns a reference to the configuration
     #[inline]
-    pub fn config(&self) -> &sdk::config::StdGadgetConfiguration {
+    pub fn config(&self) -> &GadgetConfiguration {
         &self.config
     }
 
@@ -161,26 +178,28 @@ impl BteContext {
     /// - Missing ECDSA key for any operator
     pub async fn current_service_operators_ecdsa_keys(
         &self,
-    ) -> eyre::Result<BTreeMap<AccountId32, ecdsa::Public>> {
+    ) -> Result<BTreeMap<AccountId32, Public>> {
         let client = self.tangle_client().await?;
         let current_blueprint = self.blueprint_id()?;
-        let current_service_op = self.current_service_operators(&client).await?;
         let storage = client.storage().at_latest().await?;
 
         let mut map = BTreeMap::new();
-        for (operator, _) in current_service_op {
+        for (operator, _) in client.get_operators().await? {
             let addr = api::storage()
                 .services()
                 .operators(current_blueprint, &operator);
 
-            let maybe_pref = storage.fetch(&addr).await.map_err(|err| {
-                eyre::eyre!("Failed to fetch operator storage for {operator}: {err}")
-            })?;
+            let maybe_pref = storage
+                .fetch(&addr)
+                .await
+                .map_err(|err| eyre!("Failed to fetch operator storage for {operator}: {err}"))?;
 
             if let Some(pref) = maybe_pref {
-                map.insert(operator, ecdsa::Public(pref.key));
+                let public_key = Public::from_full(pref.key.as_slice())
+                    .map_err(|_| Report::msg("Invalid key"))?;
+                map.insert(operator, public_key);
             } else {
-                return Err(eyre::eyre!("Missing ECDSA key for operator {operator}"));
+                return Err(eyre!("Missing ECDSA key for operator {operator}"));
             }
         }
 

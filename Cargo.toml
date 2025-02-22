@@ -4,17 +4,22 @@ version = "0.1.0"
 description = "A BTE Blueprint that can run keygen and decryption jobs"
 edition = "2021"
 
-[package.metadata.blueprint]
-manager = { Evm = "BteBlueprint" }
-
 [dependencies]
-gadget-sdk = { git = "https://github.com/tangle-network/gadget.git", features = ["std"] }
+blueprint-sdk = { git = "https://github.com/tangle-network/gadget.git", features = [
+    "std",
+    "macros",
+    "tangle",
+    "networking",
+    "local-store",
+    "round-based-compat",
+    "networking-sp-core-ecdsa"
+] }
 color-eyre = { version = "0.6", features = ["tracing-error", "color-spantrace"] }
 hex = { version = "0.4.3", default-features = false }
 sp-core = { version = "31.0.0", default-features = false }
 serde = { version = "1.0.214", features = ["derive"] }
 serde_json = "1.0.120"
-round-based = { version = "0.3.2", features = ["runtime-tokio"] }
+round-based = { version = "0.4.1", features = ["runtime-tokio"] }
 thiserror = "2.0.3"
 itertools = "0.13.0"
 ethers = { version = "2.0", features = ["rustls"] }
@@ -39,12 +44,22 @@ num-bigint = { version = "0.4" }
 sha3 = { version = "0.10.8" }
 
 [build-dependencies]
-blueprint-metadata = { git = "https://github.com/tangle-network/gadget.git" }
+blueprint-sdk = { git = "https://github.com/tangle-network/gadget.git", features = ["build"] }
 
 [dev-dependencies]
-blueprint-test-utils = { git = "https://github.com/tangle-network/gadget.git" }
+blueprint-sdk = { git = "https://github.com/tangle-network/gadget.git", features = ["std", "tangle", "testing"] }
 tokio = { version = "1.42.0", features = ["test-util"] }
 
 [features]
 default = ["std"]
-std = []
+std = ["blueprint-sdk/std"]
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "bte-blueprint"
+path = "src/main.rs"
+
+[package.metadata.blueprint]
+manager = { Evm = "BteBlueprint" }
