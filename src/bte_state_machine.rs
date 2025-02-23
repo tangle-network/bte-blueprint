@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use sha3::Keccak256;
 use std::collections::BTreeMap;
 
-use crate::bte::SigningError;
+use crate::bte::BteError;
 use crate::elliptic_ark_bls::convert_bls_to_ark_bls_fr;
 use crate::keygen_state_machine::{BteState, HasRecipient};
 
@@ -75,7 +75,7 @@ pub async fn bte_pd_protocol<M>(
     ct: &Vec<Ciphertext<ark_bls12_381::Bls12_381>>,
     crs: &CRS<ark_bls12_381::Bls12_381>,
     eid: u64,
-) -> Result<BTEState, SigningError>
+) -> Result<BTEState, BteError>
 where
     M: Mpc<ProtocolMessage = Msg>,
 {
@@ -89,11 +89,9 @@ where
     let secret_key = state
         .secret_key
         .as_ref()
-        .ok_or_else(|| {
-            SigningError::KeyRetrievalError("Secret key not found in state".to_string())
-        })?
+        .ok_or_else(|| BteError::KeyRetrievalError("Secret key not found in state".to_string()))?
         .get_secret_share()
-        .ok_or_else(|| SigningError::KeyRetrievalError("Failed to get secret share".to_string()))?;
+        .ok_or_else(|| BteError::KeyRetrievalError("Failed to get secret share".to_string()))?;
 
     let ark_secret_key = convert_bls_to_ark_bls_fr(&secret_key);
 
@@ -137,7 +135,7 @@ where
 
     send_message::<M, Msg>(msg, &mut outgoings)
         .await
-        .map_err(|e| SigningError::MpcError(e.to_string()))?;
+        .map_err(|e| BteError::MpcError(e.to_string()))?;
 
     // Step 3: Receive shares until there are t+1 total
     let mut rounds = RoundsRouter::builder();
@@ -147,7 +145,7 @@ where
     let msgs = rounds
         .complete(round)
         .await
-        .map_err(|e| SigningError::MpcError(format!("Failed to complete round: {}", e)))?;
+        .map_err(|e| BteError::MpcError(format!("Failed to complete round: {}", e)))?;
 
     for msg in msgs.into_vec_including_me(my_msg) {
         let (sender, (sig, _)) = (msg.sender, msg.body);
@@ -218,12 +216,12 @@ impl HasRecipient for Msg {
 async fn send_message<M, Msg>(
     msg: Msg,
     tx: &mut <<M as Mpc>::Delivery as Delivery<Msg>>::Send,
-) -> Result<(), SigningError>
+) -> Result<(), BteError>
 where
     Msg: HasRecipient,
     M: Mpc<ProtocolMessage = Msg>,
 {
     crate::keygen_state_machine::send_message::<M, Msg>(msg, tx)
         .await
-        .map_err(|e| SigningError::MpcError(e.to_string()))
+        .map_err(|e| BteError::MpcError(e.to_string()))
 }

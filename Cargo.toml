@@ -7,6 +7,7 @@ edition = "2021"
 [dependencies]
 blueprint-sdk = { git = "https://github.com/tangle-network/gadget.git", features = [
     "std",
+    "evm",
     "macros",
     "tangle",
     "networking",
@@ -16,10 +17,9 @@ blueprint-sdk = { git = "https://github.com/tangle-network/gadget.git", features
 ] }
 color-eyre = { version = "0.6", features = ["tracing-error", "color-spantrace"] }
 hex = { version = "0.4.3", default-features = false }
-sp-core = { version = "31.0.0", default-features = false }
 serde = { version = "1.0.214", features = ["derive"] }
 serde_json = "1.0.120"
-round-based = { version = "0.4.1", features = ["runtime-tokio"] }
+round-based = { version = "0.4.1", features = ["runtime-tokio", "derive"] }
 thiserror = "2.0.3"
 itertools = "0.13.0"
 ethers = { version = "2.0", features = ["rustls"] }

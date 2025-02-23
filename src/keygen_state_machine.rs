@@ -1,4 +1,5 @@
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use blueprint_sdk::logging::info;
 use gennaro_dkg::{
     Parameters, Participant, Round1BroadcastData, Round1P2PData, Round2EchoBroadcastData,
     Round3BroadcastData, Round4EchoBroadcastData, SecretParticipantImpl,
@@ -233,7 +234,7 @@ where
         .map(|r| ((r.2.source + 1) as _, r.2.data))
         .collect();
 
-    gadget_sdk::info!(
+    info!(
         "[BLS] Received {} messages from round 1",
         state.round1_broadcasts.len()
     );
@@ -269,7 +270,7 @@ where
         .map(|r| ((r.2.source + 1) as _, r.2.data))
         .collect();
 
-    gadget_sdk::info!(
+    info!(
         "[BLS] Received {} messages from round 1 P2P",
         state.round1_p2p.len()
     );
@@ -301,7 +302,7 @@ where
         .map(|r| ((r.2.source + 1) as _, r.2.data))
         .collect();
 
-    gadget_sdk::info!(
+    info!(
         "[BLS] Received {} messages from round 2",
         state.round2_broadcasts.len()
     );
@@ -333,7 +334,7 @@ where
         .map(|r| ((r.2.source + 1) as _, r.2.data))
         .collect();
 
-    gadget_sdk::info!(
+    info!(
         "[BLS] Received {} messages from round 3",
         state.round3_broadcasts.len()
     );
@@ -365,7 +366,7 @@ where
         .map(|r| ((r.2.source + 1) as _, r.2.data))
         .collect();
 
-    gadget_sdk::info!(
+    info!(
         "[BLS] Received {} messages from round 4",
         state.round4_broadcasts.len()
     );
@@ -433,7 +434,7 @@ where
 
     state.uncompressed_pk = Some(pk_agg_bytes);
 
-    gadget_sdk::info!(
+    info!(
         "[BLS] Received {} messages from round 5",
         state.round5_broadcasts.len()
     );

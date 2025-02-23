@@ -1,10 +1,12 @@
+use crate::keygen_state_machine::BteState;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use blueprint_sdk as sdk;
-use blueprint_sdk::ext::subxt::tx::Signer;
+use blueprint_sdk::logging::trace;
 use blueprint_sdk::macros::core::Gadget;
 use blueprint_sdk::networking::service_handle::NetworkServiceHandle;
 use blueprint_sdk::networking::InstanceMsgPublicKey;
 use blueprint_sdk::stores::local_database::LocalDatabase;
+use color_eyre::{eyre, eyre::eyre, Report, Result};
 use sdk::clients::GadgetServicesClient;
 use sdk::config::GadgetConfiguration;
 use sdk::contexts::keystore::KeystoreContext;
@@ -20,17 +22,15 @@ use sp_core::ecdsa;
 use sp_core::ecdsa::Public;
 use std::collections::btree_map::BTreeMap;
 use std::collections::hash_set::HashSet;
-use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tangle_subxt::subxt_core::utils::AccountId32;
 
-use crate::keygen_state_machine::BteState;
-use std::fs::File;
-use std::io::Read;
-
 /// The network protocol version for the BLS service
-const NETWORK_PROTOCOL: &str = "/bls/gennaro/1.0.0";
+pub const BLS_KEYGEN_NETWORK_PROTOCOL: &str = "/bls/gennaro_keygen/1.0.0";
+pub const BLS_BTE_NETWORK_PROTOCOL: &str = "/bls/batch_threshold_decryption/1.0.0";
 
 /// BTE Service Context that holds all the necessary context for the service
 /// to run. This structure implements various traits for keystore, client, and service
@@ -44,7 +44,7 @@ pub struct BteContext {
     pub store: Arc<LocalDatabase<BteState>>,
     pub identity: ecdsa::Pair,
     pub crs: batch_threshold::dealer::CRS<ark_bls12_381::Bls12_381>,
-    pub network_handle: Arc<NetworkServiceHandle>,
+    pub network_handle: NetworkServiceHandle,
 }
 
 // Core context management implementation
@@ -55,8 +55,8 @@ impl BteContext {
     /// Returns an error if:
     /// - Network initialization fails
     /// - Configuration is invalid
-    pub fn new(config: GadgetConfiguration) -> eyre::Result<Self> {
-        let operator_keys: HashSet<InstanceMsgPublicKek> = config
+    pub async fn new(config: GadgetConfiguration) -> eyre::Result<Self> {
+        let operator_keys: HashSet<InstanceMsgPublicKey> = config
             .tangle_client()
             .await?
             .get_operators()
@@ -65,10 +65,10 @@ impl BteContext {
             .map(|key| InstanceMsgPublicKey(*key))
             .collect();
 
-        let network_config = config.libp2p_network_config(NETWORK_PROTOCOL)?;
+        let network_config = config.libp2p_network_config(BLS_KEYGEN_NETWORK_PROTOCOL)?;
         let identity = network_config.instance_key_pair.0.clone();
 
-        let network_backend = config.libp2p_start_network(network_config, operator_keys)?;
+        let network_handle = config.libp2p_start_network(network_config, operator_keys)?;
         let keystore_dir = PathBuf::from(config.keystore_uri.clone()).join("bls.json");
         let store = Arc::new(LocalDatabase::open(keystore_dir));
 
@@ -106,7 +106,7 @@ impl BteContext {
             identity,
             call_id: None,
             config,
-            network_handle: Arc::new(network_backend),
+            network_handle,
             crs,
         })
     }
@@ -123,10 +123,16 @@ impl BteContext {
         self.store.clone()
     }
 
-    /// Returns the network protocol version
+    /// Returns the network protocol version for keygen
     #[inline]
-    pub fn network_protocol(&self) -> &str {
-        NETWORK_PROTOCOL
+    pub fn keygen_network_protocol(&self) -> &str {
+        BLS_KEYGEN_NETWORK_PROTOCOL
+    }
+
+    /// Returns the network protocol version for bte
+    #[inline]
+    pub fn bte_network_protocol(&self) -> &str {
+        BLS_BTE_NETWORK_PROTOCOL
     }
 }
 
@@ -138,10 +144,23 @@ impl BteContext {
     /// Returns an error if the blueprint ID is not found in the configuration
     pub fn blueprint_id(&self) -> eyre::Result<u64> {
         self.config()
-            .protocol_specific
+            .protocol_settings
             .tangle()
             .map(|c| c.blueprint_id)
             .map_err(|err| eyre::eyre!("Blueprint ID not found in configuration: {err}"))
+    }
+
+    /// Retrieves the service ID from the configuration
+    ///
+    /// # Returns
+    /// Returns the service ID if found, otherwise returns None
+    pub fn service_id(&self) -> u64 {
+        self.config()
+            .protocol_settings
+            .tangle()
+            .map(|c| c.service_id)
+            .unwrap_or_default()
+            .unwrap_or_default()
     }
 
     /// Retrieves the current party index and operator mapping
@@ -152,19 +171,19 @@ impl BteContext {
     /// - Current party is not found in the operator list
     pub async fn get_party_index_and_operators(
         &self,
-    ) -> eyre::Result<(usize, BTreeMap<AccountId32, Public>)> {
+    ) -> Result<(usize, BTreeMap<AccountId32, Public>)> {
         let parties = self.current_service_operators_ecdsa_keys().await?;
-        let my_id = self.config.first_sr25519_signer()?.account_id();
+        let my_id = self.keystore().first_local::<SpSr25519>()?.0;
 
-        gadget_sdk::trace!(
+        logging::trace!(
             "Looking for {my_id:?} in parties: {:?}",
             parties.keys().collect::<Vec<_>>()
         );
 
         let index_of_my_id = parties
             .iter()
-            .position(|(id, _)| id == &my_id)
-            .ok_or_else(|| eyre::eyre!("Party not found in operator list"))?;
+            .position(|(id, _)| id.0 == *my_id)
+            .ok_or_else(|| eyre!("Party not found in operator list"))?;
 
         Ok((index_of_my_id, parties))
     }

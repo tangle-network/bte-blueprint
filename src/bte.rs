@@ -1,7 +1,8 @@
-use std::collections::BTreeMap;
-
+use crate::bte_state_machine::Msg;
 use crate::context::BteContext;
+use crate::BteBlueprint;
 use abi::Abi;
+use api::services::events::JobCalled;
 use ark_ec::hashing::{
     curve_maps::wb::WBMap, map_to_curve_hasher::MapToCurveBasedHasher, HashToCurve,
 };
@@ -9,26 +10,32 @@ use ark_ff::field_hashers::DefaultFieldHasher;
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use batch_threshold::encryption::Ciphertext;
-use ethers::prelude::*;
-use gadget_sdk::{
-    event_listener::tangle::{
-        jobs::{services_post_processor, services_pre_processor},
-        TangleEventListener,
-    },
-    job,
-    network::round_based_compat::NetworkDeliveryWrapper,
-    tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled,
-    Error as GadgetError,
+use blueprint_sdk::alloy::primitives::Address;
+use blueprint_sdk::alloy::providers::{ProviderBuilder, WsConnect};
+use blueprint_sdk::contexts::tangle::TangleClientContext;
+use blueprint_sdk::crypto::hashing::keccak_256;
+use blueprint_sdk::event_listeners::tangle::events::TangleEventListener;
+use blueprint_sdk::event_listeners::tangle::services::{
+    services_post_processor, services_pre_processor,
 };
-
+use blueprint_sdk::logging::info;
+use blueprint_sdk::networking::round_based_compat::RoundBasedNetworkAdapter;
+use blueprint_sdk::networking::InstanceMsgPublicKey;
+use blueprint_sdk::tangle_subxt::tangle_testnet_runtime::api::runtime_types::tangle_primitives::services::service::BlueprintServiceManager;
+use blueprint_sdk::{self as sdk, job};
+use color_eyre::Result;
+use ethers::prelude::*;
+use round_based::PartyIndex;
+use sdk::error::Error;
+use sdk::tangle_subxt::tangle_testnet_runtime::api;
 use serde_json::Value;
 use sha3::Keccak256;
-use sp_core::ecdsa::Public;
+use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum SigningError {
+pub enum BteError {
     #[error("Context error: {0}")]
     ContextError(String),
     #[error("Key retrieval error: {0}")]
@@ -40,9 +47,9 @@ pub enum SigningError {
 /// Configuration constants for the BTE signing process
 const SIGNING_SALT: &str = "bte-signing";
 
-impl From<SigningError> for GadgetError {
-    fn from(err: SigningError) -> Self {
-        GadgetError::Other(err.to_string())
+impl From<BteError> for Error {
+    fn from(err: BteError) -> Self {
+        Error::Other(err.to_string())
     }
 }
 
@@ -68,59 +75,50 @@ impl From<SigningError> for GadgetError {
 /// - Failed to retrieve blueprint ID or call ID
 /// - Failed to retrieve the key entry
 /// - Signing process failed
-pub async fn bte(
-    keygen_call_id: u64,
-    eid: u64,
-    context: BteContext,
-) -> Result<Vec<u8>, GadgetError> {
+pub async fn bte(keygen_call_id: u64, eid: u64, context: BteContext) -> Result<Vec<u8>, Error> {
     // Get configuration and compute deterministic values
     let blueprint_id = context
         .blueprint_id()
-        .map_err(|e| SigningError::ContextError(e.to_string()))?;
+        .map_err(|e| BteError::ContextError(e.to_string()))?;
 
     let call_id = context
         .current_call_id()
         .await
-        .map_err(|e| SigningError::ContextError(e.to_string()))?;
+        .map_err(|e| BteError::ContextError(e.to_string()))?;
 
     // Setup party information
     let (i, operators) = context
         .get_party_index_and_operators()
         .await
-        .map_err(|e| SigningError::ContextError(e.to_string()))?;
+        .map_err(|e| BteError::ContextError(e.to_string()))?;
 
-    let parties: BTreeMap<u16, Public> = operators
+    let parties: HashMap<u16, InstanceMsgPublicKey> = operators
         .into_iter()
         .enumerate()
-        .map(|(j, (_, ecdsa))| (j as u16, ecdsa))
+        .map(|(j, (_, ecdsa))| (j as PartyIndex, InstanceMsgPublicKey(ecdsa)))
         .collect();
 
     let n = parties.len() as u16;
     let i = i as u16;
 
-    // Compute hash for key retrieval. Must use the call_id of the keygen job
-    let (meta_hash, deterministic_hash) =
-        crate::compute_deterministic_hashes(n, blueprint_id, keygen_call_id, SIGNING_SALT);
-
     // Retrieve the key entry
-    let store_key = hex::encode(meta_hash);
+    let store_key = hex::encode(keccak_256(
+        format!("{}:{}", blueprint_id, call_id).as_bytes(),
+    ));
     let mut state = context
         .store
         .get(&store_key)
-        .ok_or_else(|| SigningError::KeyRetrievalError("Key entry not found".to_string()))?;
+        .ok_or_else(|| BteError::KeyRetrievalError("Key entry not found".to_string()))?;
 
     let t = state.t;
 
-    gadget_sdk::info!(
-        "Starting BTE partial decryption for party {i}, n={n}, t={t}, eid={}",
-        hex::encode(deterministic_hash)
-    );
+    info!("Starting BTE partial decryption for party {i}, n={n}, t={t}");
 
-    let network = NetworkDeliveryWrapper::new(
-        context.network_backend.clone(),
+    let network = RoundBasedNetworkAdapter::<Msg>::new(
+        context.clone().network_handle,
         i,
-        deterministic_hash,
         parties.clone(),
+        crate::context::BLS_BTE_NETWORK_PROTOCOL,
     );
 
     let party = round_based::party::MpcParty::connected(network);
@@ -147,45 +145,95 @@ pub async fn bte(
     // get the ciphertexts from an RPC end point. Ideally the nodes operating the chain can just look at their local view
 
     // download ciphertexts using cast call 0xb4B46bdAA835F8E4b4d8e208B6559cD267851051 "getData(uint64 index)" eid --rpc-url "http://127.0.0.1:32845"
-    let rpc_url_path = "rpc_url.txt";
-    let rpc_url = std::fs::read_to_string(rpc_url_path).expect("Failed to read RPC URL from file");
-    let rpc_url = rpc_url.trim(); // Remove any trailing newline characters
-    let provider = Provider::<Http>::try_from(rpc_url).unwrap();
+    // let rpc_url_path = "rpc_url.txt";
+    // let rpc_url = std::fs::read_to_string(rpc_url_path).expect("Failed to read RPC URL from file");
+    // let rpc_url = rpc_url.trim(); // Remove any trailing newline characters
+    // let provider = Provider::<Http>::try_from(rpc_url).unwrap();
 
-    // read the json file
-    let json_path = "contracts/out/SecureStorage.sol/SecureStorage.json";
+    // // read the json file
+    // let json_path = "contracts/out/SecureStorage.sol/SecureStorage.json";
 
-    // Read the JSON file
-    let json = std::fs::read_to_string(json_path)
-        .map_err(|e| SigningError::ContextError(e.to_string()))?;
+    // // Read the JSON file
+    // let json = std::fs::read_to_string(json_path)
+    //     .map_err(|e| SigningError::ContextError(e.to_string()))?;
 
-    // Parse the JSON as a map
-    let parsed_json: Value = serde_json::from_str(&json).unwrap();
+    // // Parse the JSON as a map
+    // let parsed_json: Value = serde_json::from_str(&json).unwrap();
 
-    // Get the ABI from the JSON
-    let abi: Abi = serde_json::from_value(parsed_json["abi"].clone()).unwrap();
+    // // Get the ABI from the JSON
+    // let abi: Abi = serde_json::from_value(parsed_json["abi"].clone()).unwrap();
 
-    // Define the contract address
-    let contract_address_path = "deployed_address.txt";
-    let contract_address = std::fs::read_to_string(contract_address_path)
-        .expect("Failed to read contract address from file");
-    let contract_address = contract_address.trim(); // Remove any trailing newline characters
-    let contract_address = contract_address.parse::<Address>().unwrap();
+    // // Define the contract address
+    // let contract_address_path = "deployed_address.txt";
+    // let contract_address = std::fs::read_to_string(contract_address_path)
+    //     .expect("Failed to read contract address from file");
+    // let contract_address = contract_address.trim(); // Remove any trailing newline characters
+    // let contract_address = contract_address.parse::<Address>().unwrap();
 
     // Create a new contract instance
-    let contract: ContractInstance<std::sync::Arc<Provider<Http>>, _> =
-        Contract::new(contract_address, abi, provider.into());
+    // let contract: ContractInstance<std::sync::Arc<Provider<Http>>, _> =
+    //     Contract::new(contract_address, abi, provider.into());
 
-    // Call the `dataStore` mapping
-    let ct_bytes: Bytes = contract
-        .method::<_, Bytes>("dataStore", eid)
-        .unwrap()
-        .call()
+    let blueprint_address_key = api::services::storage::StorageApi.blueprints(blueprint_id);
+    println!("Fetching blueprint manager address from storage");
+    let blueprint_manager_address = match context
+        .tangle_client()
         .await
-        .unwrap();
+        .map_err(|e| {
+            blueprint_sdk::logging::error!("Failed to get tangle client: {}", e);
+            BteError::ContextError(e.to_string())
+        })?
+        .storage()
+        .at_latest()
+        .await
+        .map_err(|e| {
+            blueprint_sdk::logging::error!("Failed to get latest storage: {}", e);
+            BteError::ContextError(e.to_string())
+        })?
+        .fetch(&blueprint_address_key)
+        .await
+        .map_err(|e| {
+            blueprint_sdk::logging::error!("Failed to fetch from storage: {}", e);
+            BteError::ContextError(e.to_string())
+        })? {
+        Some((_, v)) => {
+            let addr = match v.manager {
+                BlueprintServiceManager::Evm(address) => Address::from(address.0),
+            };
+            println!("Got blueprint manager address: {:?}", addr);
+            addr
+        }
+        None => {
+            blueprint_sdk::logging::error!("Blueprint manager address not found in storage");
+            return Err(Error::Other(
+                "Blueprint manager address not found".to_string(),
+            ));
+        }
+    };
+    let ws_rpc_endpoint = &context.config.ws_rpc_endpoint;
+    println!("Setting up provider and contract");
+    let provider = match ProviderBuilder::new()
+        .with_recommended_fillers()
+        .on_ws(WsConnect::new(ws_rpc_endpoint))
+        .await
+    {
+        Ok(p) => p,
+        Err(e) => {
+            blueprint_sdk::logging::error!("Failed to create provider: {}", e);
+            return Err(Error::Other(format!("Failed to create provider: {}", e)));
+        }
+    };
+    let contract = BteBlueprint::new(blueprint_manager_address, provider);
+
+    println!("Calling dataStore mapping");
+    let ct_bytes = contract
+        .dataStore(context.service_id(), eid)
+        .call()
+        .await?
+        ._0;
 
     let ct = Vec::<Ciphertext<ark_bls12_381::Bls12_381>>::deserialize_compressed(&*ct_bytes.0)
-        .map_err(|e| SigningError::ContextError(e.to_string()))?;
+        .map_err(|e| BteError::ContextError(e.to_string()))?;
 
     let output =
         crate::bte_state_machine::bte_pd_protocol(party, i, n, &mut state, &ct, &context.crs, eid)
@@ -197,14 +245,11 @@ pub async fn bte(
         assert_eq!(recovered_msg[i], msg);
     }
 
-    gadget_sdk::info!(
-        "Ending BTE partial decryption for party {i}, n={n}, t={t}, eid={}",
-        hex::encode(deterministic_hash)
-    );
+    info!("Ending BTE partial decryption for party {i}, n={n}, t={t}");
 
     let signature = output
         .signature
-        .ok_or_else(|| SigningError::KeyRetrievalError("Signature not found".to_string()))?;
+        .ok_or_else(|| BteError::KeyRetrievalError("Signature not found".to_string()))?;
 
     let mut signature_bytes = Vec::new();
     signature

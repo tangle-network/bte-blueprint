@@ -1,18 +1,11 @@
+use blueprint_sdk::logging::info;
+use blueprint_sdk::runners::{core::runner::BlueprintRunner, tangle::tangle::TangleConfig};
 use bte_blueprint::context::BteContext;
 use color_eyre::Result;
-use gadget_sdk::info;
-use gadget_sdk::runners::tangle::TangleConfig;
-use gadget_sdk::runners::BlueprintRunner;
-use sp_core::Pair;
 
-#[gadget_sdk::main(env)]
-async fn main() {
-    let context = BteContext::new(env.clone())?;
-
-    info!(
-        "Starting the Blueprint Runner for {} ...",
-        hex::encode(context.identity.public().as_ref())
-    );
+#[blueprint_sdk::main(env)]
+async fn main() -> Result<()> {
+    let context = BteContext::new(env.clone()).await?;
 
     info!("~~~ Executing the BTE blueprint ~~~");
 
